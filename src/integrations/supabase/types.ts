@@ -14,7 +14,145 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      customer_invoices: {
+        Row: {
+          cf_control_client_id: string | null
+          cf_error: string | null
+          cf_receivable_id: string | null
+          cf_status: string
+          created_at: string
+          email_sent_at: string | null
+          id: string
+          invoice_id: string
+          pdf_storage_path: string | null
+          phone_numbers: string[]
+          total_amount: number
+          updated_at: string
+        }
+        Insert: {
+          cf_control_client_id?: string | null
+          cf_error?: string | null
+          cf_receivable_id?: string | null
+          cf_status?: string
+          created_at?: string
+          email_sent_at?: string | null
+          id?: string
+          invoice_id: string
+          pdf_storage_path?: string | null
+          phone_numbers?: string[]
+          total_amount?: number
+          updated_at?: string
+        }
+        Update: {
+          cf_control_client_id?: string | null
+          cf_error?: string | null
+          cf_receivable_id?: string | null
+          cf_status?: string
+          created_at?: string
+          email_sent_at?: string | null
+          id?: string
+          invoice_id?: string
+          pdf_storage_path?: string | null
+          phone_numbers?: string[]
+          total_amount?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "customer_invoices_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoice_lines: {
+        Row: {
+          created_at: string
+          id: string
+          invoice_id: string
+          other_traffic: number
+          pausal: number
+          phone_number: string
+          raw_json: Json | null
+          total: number
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          invoice_id: string
+          other_traffic?: number
+          pausal?: number
+          phone_number: string
+          raw_json?: Json | null
+          total?: number
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          invoice_id?: string
+          other_traffic?: number
+          pausal?: number
+          phone_number?: string
+          raw_json?: Json | null
+          total?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "invoice_lines_invoice_id_fkey"
+            columns: ["invoice_id"]
+            isOneToOne: false
+            referencedRelation: "invoices"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      invoices: {
+        Row: {
+          currency: string
+          id: string
+          issued_at: string | null
+          pdf_storage_path: string | null
+          raw_xml: string
+          status: string
+          supplier: string | null
+          total_amount: number
+          total_with_vat: number
+          uploaded_at: string
+          uploaded_by: string | null
+          xml_number: string
+        }
+        Insert: {
+          currency?: string
+          id?: string
+          issued_at?: string | null
+          pdf_storage_path?: string | null
+          raw_xml: string
+          status?: string
+          supplier?: string | null
+          total_amount?: number
+          total_with_vat?: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+          xml_number: string
+        }
+        Update: {
+          currency?: string
+          id?: string
+          issued_at?: string | null
+          pdf_storage_path?: string | null
+          raw_xml?: string
+          status?: string
+          supplier?: string | null
+          total_amount?: number
+          total_with_vat?: number
+          uploaded_at?: string
+          uploaded_by?: string | null
+          xml_number?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
