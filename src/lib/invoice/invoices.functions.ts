@@ -63,7 +63,7 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
       pausal: l.pausal,
       other_traffic: l.otherTraffic,
       total: l.total,
-      raw_json: l.raw as Record<string, unknown>,
+      raw_json: JSON.parse(JSON.stringify(l.raw)),
     }));
     if (lineRows.length > 0) {
       const { error: linesErr } = await supabaseAdmin.from("invoice_lines").insert(lineRows);
