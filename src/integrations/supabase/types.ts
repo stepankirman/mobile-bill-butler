@@ -38,6 +38,7 @@ export type Database = {
           cf_error: string | null
           cf_receivable_id: string | null
           cf_status: string
+          client_name: string | null
           created_at: string
           email_sent_at: string | null
           id: string
@@ -52,6 +53,7 @@ export type Database = {
           cf_error?: string | null
           cf_receivable_id?: string | null
           cf_status?: string
+          client_name?: string | null
           created_at?: string
           email_sent_at?: string | null
           id?: string
@@ -66,6 +68,7 @@ export type Database = {
           cf_error?: string | null
           cf_receivable_id?: string | null
           cf_status?: string
+          client_name?: string | null
           created_at?: string
           email_sent_at?: string | null
           id?: string

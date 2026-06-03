@@ -1,12 +1,29 @@
 import { XMLParser } from "fast-xml-parser";
 import { normalizePhone } from "../phone";
 
+export interface ParsedPolItem {
+  feature: string;
+  description: string;
+  quantity: number;
+  unit: string;
+  unitPrice: number;
+  total: number;
+}
+
 export interface ParsedInvoiceLine {
   phone: string;
   total: number;
   pausal: number;
   otherTraffic: number;
+  items: ParsedPolItem[];
   raw: unknown;
+}
+
+export interface ParsedCustomer {
+  company: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  fullName: string | null;
 }
 
 export interface ParsedInvoice {
@@ -15,7 +32,10 @@ export interface ParsedInvoice {
   issuedAt: string | null;
   totalAmount: number;
   totalWithVat: number;
+  vatAmount: number;
+  vatRate: number;
   currency: string;
+  customer: ParsedCustomer;
   lines: ParsedInvoiceLine[];
 }
 
@@ -31,14 +51,13 @@ function asNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
-function asArray<T>(v: T | T[] | undefined | null): T[] {
-  if (v == null) return [];
-  return Array.isArray(v) ? v : [v];
+function asString(v: unknown): string {
+  if (v == null) return "";
+  return String(v).trim();
 }
 
-// Erbia/Laudatio puts per-number details inside DETAIL_CISLO, where each item
-// is keyed itemN. fast-xml-parser keeps those as separate object keys, so we
-// flatten everything that starts with "item".
+// Erbia/Laudatio puts repeated children inside a parent under keys "item0",
+// "item1" ... fast-xml-parser keeps them as separate object keys.
 function collectItems(container: unknown): unknown[] {
   if (container == null) return [];
   if (Array.isArray(container)) return container;
@@ -58,6 +77,7 @@ export function parseInvoiceXml(xml: string): ParsedInvoice {
   const invoice = (parsed.invoice ?? parsed) as Record<string, unknown>;
   const head = (invoice.HLAVICKA ?? {}) as Record<string, unknown>;
   const obchodnik = (invoice.OBCHODNIK ?? {}) as Record<string, unknown>;
+  const zakaznik = (invoice.ZAKAZNIK ?? {}) as Record<string, unknown>;
 
   const detail = invoice.DETAIL_CISLO;
   const detailItems = collectItems(detail);
@@ -69,23 +89,42 @@ export function parseInvoiceXml(xml: string): ParsedInvoice {
     const polItems = collectItems(item.POL);
     let pausal = 0;
     let otherTraffic = 0;
+    const items: ParsedPolItem[] = [];
     for (const p of polItems) {
       const pol = p as Record<string, unknown>;
-      const feature = String(pol.FEATURE ?? "").toUpperCase();
-      const price = asNumber(pol.CENA) * asNumber(pol.POCET_JEDNOTEK || 1);
-      if (feature === "PAUSAL") pausal += price;
-      else otherTraffic += price;
+      const feature = asString(pol.FEATURE).toUpperCase();
+      const qty = asNumber(pol.POCET_JEDNOTEK || 1);
+      const unitPrice = asNumber(pol.CENA);
+      const lineTotal = unitPrice * (qty || 1);
+      const description = asString(pol.POPIS);
+      const unit = asString(pol.JEDNOTKA);
+      items.push({ feature, description, quantity: qty, unit, unitPrice, total: lineTotal });
+      if (feature === "PAUSAL") pausal += lineTotal;
+      else otherTraffic += lineTotal;
     }
-    return { phone, total, pausal, otherTraffic, raw: item };
+    return { phone, total, pausal, otherTraffic, items, raw: item };
   });
+
+  const firstName = asString(zakaznik.JMENO) || null;
+  const lastName = asString(zakaznik.PRIJMENI) || null;
+  const company = asString(zakaznik.SPOLECNOST) || null;
+  const fullName =
+    company || [firstName, lastName].filter(Boolean).join(" ").trim() || null;
+
+  const totalAmount = asNumber(head.CELKOVA_CASTKA);
+  const totalWithVat = asNumber(head.CELKOVA_CASTKA_S_DPH);
+  const vatRate = asNumber(head.DPH_FINAL);
 
   return {
     number: String(head.CISLO_FAKTURY ?? ""),
     supplier: (obchodnik.SPOLECNOST as string) ?? null,
     issuedAt: (head.DATUM_VYSTAVENI as string) ?? null,
-    totalAmount: asNumber(head.CELKOVA_CASTKA),
-    totalWithVat: asNumber(head.CELKOVA_CASTKA_S_DPH),
+    totalAmount,
+    totalWithVat,
+    vatAmount: Math.max(0, totalWithVat - totalAmount),
+    vatRate,
     currency: "CZK",
+    customer: { company, firstName, lastName, fullName },
     lines,
   };
 }

@@ -56,14 +56,14 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
       .single();
     if (invErr || !inv) throw new Error(invErr?.message ?? "Insert invoice failed");
 
-    // Insert invoice_lines
+    // Insert invoice_lines (raw_json keeps full POL detail incl. items).
     const lineRows = parsed.lines.map((l) => ({
       invoice_id: inv.id,
       phone_number: l.phone,
       pausal: l.pausal,
       other_traffic: l.otherTraffic,
       total: l.total,
-      raw_json: JSON.parse(JSON.stringify(l.raw)),
+      raw_json: JSON.parse(JSON.stringify({ items: l.items, raw: l.raw })),
     }));
     if (lineRows.length > 0) {
       const { error: linesErr } = await supabaseAdmin.from("invoice_lines").insert(lineRows);
@@ -74,6 +74,7 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
     const masterPdf = await renderInvoicePdf({
       invoice: parsed,
       clientLabel: null,
+      clientName: parsed.customer.fullName,
       lines: parsed.lines,
     });
     const masterPath = `${inv.id}/master.pdf`;
@@ -84,6 +85,7 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
     const customerRows: Array<{
       invoice_id: string;
       cf_control_client_id: string | null;
+      client_name: string | null;
       phone_numbers: string[];
       total_amount: number;
       pdf_storage_path: string;
@@ -94,9 +96,21 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
     for (const [clientId, lines] of groups) {
       idx += 1;
       const total = lines.reduce((s, l) => s + l.total, 0);
+      // Resolve client name: by clientId, otherwise from first phone, else XML customer.
+      let clientName: string | null = null;
+      if (clientId) clientName = mapping.byClientName.get(clientId) ?? null;
+      if (!clientName) {
+        for (const l of lines) {
+          const n = mapping.byPhoneName.get(l.phone);
+          if (n) { clientName = n; break; }
+        }
+      }
+      if (!clientName) clientName = parsed.customer.fullName;
+
       const pdfBytes = await renderInvoicePdf({
         invoice: parsed,
         clientLabel: clientId || "(nenalezený klient)",
+        clientName,
         lines,
       });
       const path = `${inv.id}/customer-${idx}.pdf`;
@@ -104,6 +118,7 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
       customerRows.push({
         invoice_id: inv.id,
         cf_control_client_id: clientId || null,
+        client_name: clientName,
         phone_numbers: lines.map((l) => l.phone),
         total_amount: total,
         pdf_storage_path: path,
