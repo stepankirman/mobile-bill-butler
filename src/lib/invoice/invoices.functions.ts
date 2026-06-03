@@ -147,6 +147,92 @@ export const listInvoices = createServerFn({ method: "GET" })
     return { invoices: data ?? [] };
   });
 
+export const searchInvoices = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ query: z.string().min(1).max(200) }))
+  .handler(async ({ data }) => {
+    const q = data.query.trim();
+    const digits = q.replace(/\D/g, "");
+    const results: Array<{
+      invoice_id: string;
+      xml_number: string;
+      issued_at: string | null;
+      phone: string;
+      client_name: string | null;
+      total: number;
+    }> = [];
+
+    if (digits.length >= 3) {
+      const { data: lines } = await supabaseAdmin
+        .from("invoice_lines")
+        .select("invoice_id, phone_number, total")
+        .ilike("phone_number", `%${digits}%`)
+        .limit(200);
+      if (lines && lines.length > 0) {
+        const ids = Array.from(new Set(lines.map((l) => l.invoice_id)));
+        const { data: invs } = await supabaseAdmin
+          .from("invoices")
+          .select("id, xml_number, issued_at")
+          .in("id", ids);
+        const { data: cis } = await supabaseAdmin
+          .from("customer_invoices")
+          .select("invoice_id, client_name, phone_numbers")
+          .in("invoice_id", ids);
+        const invMap = new Map((invs ?? []).map((i) => [i.id, i]));
+        for (const l of lines) {
+          const inv = invMap.get(l.invoice_id);
+          if (!inv) continue;
+          const ci = (cis ?? []).find(
+            (c) => c.invoice_id === l.invoice_id && c.phone_numbers?.includes(l.phone_number),
+          );
+          results.push({
+            invoice_id: l.invoice_id,
+            xml_number: inv.xml_number,
+            issued_at: inv.issued_at,
+            phone: l.phone_number,
+            client_name: ci?.client_name ?? null,
+            total: Number(l.total),
+          });
+        }
+      }
+    }
+
+    const { data: cis } = await supabaseAdmin
+      .from("customer_invoices")
+      .select("invoice_id, client_name, phone_numbers, total_amount")
+      .ilike("client_name", `%${q}%`)
+      .limit(200);
+    if (cis && cis.length > 0) {
+      const ids = Array.from(new Set(cis.map((c) => c.invoice_id)));
+      const { data: invs } = await supabaseAdmin
+        .from("invoices")
+        .select("id, xml_number, issued_at")
+        .in("id", ids);
+      const invMap = new Map((invs ?? []).map((i) => [i.id, i]));
+      for (const c of cis) {
+        const inv = invMap.get(c.invoice_id);
+        if (!inv) continue;
+        results.push({
+          invoice_id: c.invoice_id,
+          xml_number: inv.xml_number,
+          issued_at: inv.issued_at,
+          phone: (c.phone_numbers ?? []).join(", "),
+          client_name: c.client_name,
+          total: Number(c.total_amount),
+        });
+      }
+    }
+
+    const seen = new Set<string>();
+    const unique = results.filter((r) => {
+      const key = `${r.invoice_id}|${r.phone}`;
+      if (seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+    return { results: unique };
+  });
+
 export const deleteInvoices = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }))
