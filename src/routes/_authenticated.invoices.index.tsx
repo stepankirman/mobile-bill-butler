@@ -1,7 +1,8 @@
+import { useMemo, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
-import { useQuery } from "@tanstack/react-query";
-import { listInvoices } from "@/lib/invoice/invoices.functions";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { listInvoices, deleteInvoices } from "@/lib/invoice/invoices.functions";
 import {
   Table,
   TableBody,
@@ -12,23 +13,131 @@ import {
 } from "@/components/ui/table";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Checkbox } from "@/components/ui/checkbox";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
+import { Trash2 } from "lucide-react";
+import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/invoices/")({
   head: () => ({ meta: [{ title: "Historie faktur" }] }),
   component: InvoiceListPage,
 });
 
+function monthKey(d: string | null): string {
+  if (!d) return "—";
+  return d.slice(0, 7); // YYYY-MM
+}
+
 function InvoiceListPage() {
   const fetchFn = useServerFn(listInvoices);
+  const deleteFn = useServerFn(deleteInvoices);
+  const qc = useQueryClient();
   const { data, isLoading, error } = useQuery({
     queryKey: ["invoices"],
     queryFn: () => fetchFn(),
   });
 
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const invoices = data?.invoices ?? [];
+  const allIds = useMemo(() => invoices.map((i) => i.id), [invoices]);
+  const months = useMemo(() => {
+    const m = new Set<string>();
+    invoices.forEach((i) => m.add(monthKey(i.issued_at)));
+    return Array.from(m).sort().reverse();
+  }, [invoices]);
+
+  const allChecked = selected.size > 0 && selected.size === allIds.length;
+
+  function toggle(id: string) {
+    setSelected((s) => {
+      const n = new Set(s);
+      if (n.has(id)) n.delete(id);
+      else n.add(id);
+      return n;
+    });
+  }
+  function toggleAll() {
+    setSelected(allChecked ? new Set() : new Set(allIds));
+  }
+  function selectMonth(mk: string) {
+    const ids = invoices.filter((i) => monthKey(i.issued_at) === mk).map((i) => i.id);
+    setSelected(new Set(ids));
+  }
+
+  const delMut = useMutation({
+    mutationFn: (ids: string[]) => deleteFn({ data: { ids } }),
+    onSuccess: (res) => {
+      toast.success(`Smazáno ${res.deleted} faktur`);
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["invoices"] });
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba mazání"),
+  });
+
   return (
     <Card>
-      <CardHeader>
+      <CardHeader className="flex flex-row items-center justify-between gap-4">
         <CardTitle>Historie faktur</CardTitle>
+        <div className="flex flex-wrap items-center gap-2">
+          {months.length > 1 && (
+            <select
+              className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+              defaultValue=""
+              onChange={(e) => {
+                if (e.target.value) {
+                  selectMonth(e.target.value);
+                  e.target.value = "";
+                }
+              }}
+            >
+              <option value="">Označit měsíc…</option>
+              {months.map((m) => (
+                <option key={m} value={m}>
+                  {m}
+                </option>
+              ))}
+            </select>
+          )}
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button
+                variant="destructive"
+                size="sm"
+                disabled={selected.size === 0 || delMut.isPending}
+              >
+                <Trash2 className="mr-2 h-4 w-4" />
+                Smazat ({selected.size})
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Smazat vybrané faktury?</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Bude smazáno {selected.size} faktur včetně všech položek, klientských
+                  rozpisů a PDF. Akci nelze vrátit.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel>Zrušit</AlertDialogCancel>
+                <AlertDialogAction onClick={() => delMut.mutate(Array.from(selected))}>
+                  Smazat
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </div>
       </CardHeader>
       <CardContent>
         {isLoading && <p className="text-sm text-muted-foreground">Načítám…</p>}
@@ -40,6 +149,13 @@ function InvoiceListPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-10">
+                  <Checkbox
+                    checked={allChecked}
+                    onCheckedChange={toggleAll}
+                    aria-label="Označit vše"
+                  />
+                </TableHead>
                 <TableHead>Číslo faktury</TableHead>
                 <TableHead>Dodavatel</TableHead>
                 <TableHead>Vystaveno</TableHead>
@@ -50,7 +166,14 @@ function InvoiceListPage() {
             </TableHeader>
             <TableBody>
               {data.invoices.map((inv) => (
-                <TableRow key={inv.id} className="cursor-pointer">
+                <TableRow key={inv.id} data-state={selected.has(inv.id) ? "selected" : undefined}>
+                  <TableCell>
+                    <Checkbox
+                      checked={selected.has(inv.id)}
+                      onCheckedChange={() => toggle(inv.id)}
+                      aria-label={`Označit ${inv.xml_number}`}
+                    />
+                  </TableCell>
                   <TableCell>
                     <Link to="/invoices/$id" params={{ id: inv.id }} className="font-medium hover:underline">
                       {inv.xml_number}
