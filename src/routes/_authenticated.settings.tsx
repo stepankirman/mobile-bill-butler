@@ -27,6 +27,7 @@ function SettingsPage() {
   const [sheetName, setSheetName] = useState("");
   const [phoneCol, setPhoneCol] = useState(2);
   const [clientCol, setClientCol] = useState(3);
+  const [nameCol, setNameCol] = useState(4);
 
   useEffect(() => {
     if (data?.config) {
@@ -34,34 +35,25 @@ function SettingsPage() {
       setSheetName(data.config.sheet_name);
       setPhoneCol(data.config.phone_column);
       setClientCol(data.config.client_id_column);
+      setNameCol(data.config.name_column);
     }
   }, [data]);
 
+  const payload = () => ({
+    spreadsheet_id_or_url: url,
+    sheet_name: sheetName,
+    phone_column: phoneCol,
+    client_id_column: clientCol,
+    name_column: nameCol,
+  });
+
   const saveMut = useMutation({
-    mutationFn: () =>
-      saveFn({
-        data: {
-          spreadsheet_id_or_url: url,
-          sheet_name: sheetName,
-          phone_column: phoneCol,
-          client_id_column: clientCol,
-        },
-      }),
+    mutationFn: () => saveFn({ data: payload() }),
     onSuccess: () => toast.success("Nastavení uloženo."),
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba"),
   });
 
-  const testMut = useMutation({
-    mutationFn: () =>
-      testFn({
-        data: {
-          spreadsheet_id_or_url: url,
-          sheet_name: sheetName,
-          phone_column: phoneCol,
-          client_id_column: clientCol,
-        },
-      }),
-  });
+  const testMut = useMutation({ mutationFn: () => testFn({ data: payload() }) });
 
   const sheetUrl = url
     ? `https://docs.google.com/spreadsheets/d/${url.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/)?.[1] ?? url}/edit`
@@ -87,7 +79,7 @@ function SettingsPage() {
                   placeholder="https://docs.google.com/spreadsheets/d/…/edit"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Sheet musí být veřejně čitelný („Kdokoli s odkazem – Prohlížející").
+                  Sheet musí být veřejně čitelný („Kdokoli s odkazem – Prohlížející“).
                   {sheetUrl && (
                     <>
                       {" "}
@@ -104,26 +96,21 @@ function SettingsPage() {
                 <Input id="sheet" value={sheetName} onChange={(e) => setSheetName(e.target.value)} />
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-3 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="phoneCol">Sloupec s telefonem (0 = A, 1 = B, 2 = C…)</Label>
-                  <Input
-                    id="phoneCol"
-                    type="number"
-                    min={0}
-                    value={phoneCol}
-                    onChange={(e) => setPhoneCol(Number(e.target.value))}
-                  />
+                  <Label htmlFor="phoneCol">Telefon (0=A, 1=B, 2=C…)</Label>
+                  <Input id="phoneCol" type="number" min={0} value={phoneCol}
+                    onChange={(e) => setPhoneCol(Number(e.target.value))} />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="clientCol">Sloupec s ID klienta</Label>
-                  <Input
-                    id="clientCol"
-                    type="number"
-                    min={0}
-                    value={clientCol}
-                    onChange={(e) => setClientCol(Number(e.target.value))}
-                  />
+                  <Label htmlFor="clientCol">ID klienta</Label>
+                  <Input id="clientCol" type="number" min={0} value={clientCol}
+                    onChange={(e) => setClientCol(Number(e.target.value))} />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="nameCol">Jméno klienta</Label>
+                  <Input id="nameCol" type="number" min={0} value={nameCol}
+                    onChange={(e) => setNameCol(Number(e.target.value))} />
                 </div>
               </div>
 
@@ -155,11 +142,7 @@ function SettingsPage() {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               Výsledek testu
-              {testMut.data.ok ? (
-                <Badge>OK</Badge>
-              ) : (
-                <Badge variant="destructive">Chyba</Badge>
-              )}
+              {testMut.data.ok ? <Badge>OK</Badge> : <Badge variant="destructive">Chyba</Badge>}
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
@@ -167,7 +150,8 @@ function SettingsPage() {
               <>
                 <p>
                   Načteno <strong>{testMut.data.totalRows}</strong> řádků, z toho{" "}
-                  <strong>{testMut.data.mappingCount}</strong> validních mapování (telefon → ID klienta).
+                  <strong>{testMut.data.mappingCount}</strong> mapování telefon → ID a{" "}
+                  <strong>{testMut.data.nameCount}</strong> jmen.
                 </p>
                 <div>
                   <p className="font-medium">Hlavička listu:</p>
@@ -185,7 +169,7 @@ function SettingsPage() {
                     <ul className="mt-1 space-y-1 font-mono text-xs">
                       {testMut.data.samples.map((s) => (
                         <li key={s.phone}>
-                          {s.phone} → {s.clientId}
+                          {s.phone} → {s.clientId} {s.name && <span className="text-muted-foreground">({s.name})</span>}
                         </li>
                       ))}
                     </ul>
