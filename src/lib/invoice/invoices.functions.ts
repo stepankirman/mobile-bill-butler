@@ -56,14 +56,14 @@ export const processInvoiceUpload = createServerFn({ method: "POST" })
       .single();
     if (invErr || !inv) throw new Error(invErr?.message ?? "Insert invoice failed");
 
-    // Insert invoice_lines
+    // Insert invoice_lines (raw_json keeps full POL detail incl. items).
     const lineRows = parsed.lines.map((l) => ({
       invoice_id: inv.id,
       phone_number: l.phone,
       pausal: l.pausal,
       other_traffic: l.otherTraffic,
       total: l.total,
-      raw_json: JSON.parse(JSON.stringify(l.raw)),
+      raw_json: JSON.parse(JSON.stringify({ items: l.items, raw: l.raw })),
     }));
     if (lineRows.length > 0) {
       const { error: linesErr } = await supabaseAdmin.from("invoice_lines").insert(lineRows);
