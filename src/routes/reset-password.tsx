@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 
 export const Route = createFileRoute("/reset-password")({
+  ssr: false,
   head: () => ({
     meta: [{ title: "Nové heslo – Mobilní vyúčtování TeamCity" }],
   }),
@@ -22,13 +23,51 @@ function ResetPasswordPage() {
   const [ready, setReady] = useState(false);
 
   useEffect(() => {
-    // Supabase automaticky zpracuje recovery token z URL hashe a vytvoří session.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === "PASSWORD_RECOVERY" || event === "SIGNED_IN") setReady(true);
     });
-    supabase.auth.getSession().then(({ data }) => {
+
+    (async () => {
+      // 1) Error v URL (např. expirovaný odkaz)
+      const hash = new URLSearchParams(window.location.hash.replace(/^#/, ""));
+      const search = new URLSearchParams(window.location.search);
+      const urlError = hash.get("error_description") || search.get("error_description");
+      if (urlError) {
+        setError(decodeURIComponent(urlError));
+        return;
+      }
+
+      // 2) PKCE flow – ?code=...
+      const code = search.get("code");
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) {
+          setError(error.message);
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      // 3) Implicit flow – #access_token=...&refresh_token=...
+      const access_token = hash.get("access_token");
+      const refresh_token = hash.get("refresh_token");
+      if (access_token && refresh_token) {
+        const { error } = await supabase.auth.setSession({ access_token, refresh_token });
+        if (error) {
+          setError(error.message);
+          return;
+        }
+        setReady(true);
+        return;
+      }
+
+      // 4) Možná už existuje session
+      const { data } = await supabase.auth.getSession();
       if (data.session) setReady(true);
-    });
+      else setError("Odkaz pro obnovení hesla je neplatný nebo vypršel. Vyžádejte si nový.");
+    })();
+
     return () => subscription.unsubscribe();
   }, []);
 
