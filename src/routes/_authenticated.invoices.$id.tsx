@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -17,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Send } from "lucide-react";
+import { Download, Send, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/invoices/$id")({
@@ -25,12 +26,22 @@ export const Route = createFileRoute("/_authenticated/invoices/$id")({
   component: InvoiceDetailPage,
 });
 
+interface PolItem {
+  feature?: string;
+  description?: string;
+  quantity?: number;
+  unit?: string;
+  unitPrice?: number;
+  total?: number;
+}
+
 function InvoiceDetailPage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
   const fetchFn = useServerFn(getInvoiceDetail);
   const signFn = useServerFn(getPdfSignedUrl);
   const importFn = useServerFn(importCustomerInvoice);
+  const [expanded, setExpanded] = useState<Set<string>>(new Set());
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["invoice", id],
@@ -46,14 +57,28 @@ function InvoiceDetailPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
   });
 
-  async function openPdf(path: string | null) {
+  // Pre-open window synchronously to avoid popup blocker on async URLs.
+  function openPdf(path: string | null) {
     if (!path) return;
-    try {
-      const { url } = await signFn({ data: { path } });
-      window.open(url, "_blank");
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
-    }
+    const win = window.open("about:blank", "_blank");
+    signFn({ data: { path } })
+      .then(({ url }) => {
+        if (win) win.location.href = url;
+        else window.location.href = url;
+      })
+      .catch((e) => {
+        if (win) win.close();
+        toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
+      });
+  }
+
+  function toggleRow(key: string) {
+    setExpanded((s) => {
+      const n = new Set(s);
+      if (n.has(key)) n.delete(key);
+      else n.add(key);
+      return n;
+    });
   }
 
   if (isLoading) return <p className="text-sm text-muted-foreground">Načítám…</p>;
@@ -79,7 +104,8 @@ function InvoiceDetailPage() {
             </p>
             <p className="text-xs text-muted-foreground">DPH</p>
             <p className="text-sm">
-              {(Number(invoice.total_with_vat) - Number(invoice.total_amount)).toFixed(2)} {invoice.currency}
+              {(Number(invoice.total_with_vat) - Number(invoice.total_amount)).toFixed(2)}{" "}
+              {invoice.currency}
             </p>
             <p className="text-xs text-muted-foreground">Celkem s DPH</p>
             <p className="text-2xl font-semibold">
@@ -113,8 +139,14 @@ function InvoiceDetailPage() {
             <TableBody>
               {customers.map((c) => (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.client_name ?? <span className="text-muted-foreground">—</span>}</TableCell>
-                  <TableCell>{c.cf_control_client_id ?? <span className="text-destructive">nenamapováno</span>}</TableCell>
+                  <TableCell className="font-medium">
+                    {c.client_name ?? <span className="text-muted-foreground">—</span>}
+                  </TableCell>
+                  <TableCell>
+                    {c.cf_control_client_id ?? (
+                      <span className="text-destructive">nenamapováno</span>
+                    )}
+                  </TableCell>
                   <TableCell className="text-xs">{c.phone_numbers.join(", ")}</TableCell>
                   <TableCell className="text-right">
                     {Number(c.total_amount).toFixed(2)} {invoice.currency}
@@ -131,9 +163,7 @@ function InvoiceDetailPage() {
                     >
                       {c.cf_status}
                     </Badge>
-                    {c.cf_error && (
-                      <p className="mt-1 text-xs text-destructive">{c.cf_error}</p>
-                    )}
+                    {c.cf_error && <p className="mt-1 text-xs text-destructive">{c.cf_error}</p>}
                   </TableCell>
                   <TableCell className="text-right space-x-2">
                     <Button
@@ -166,12 +196,16 @@ function InvoiceDetailPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>SIM karty ({lines.length})</CardTitle>
+          <CardTitle>SIM karty / vyúčtování ({lines.length})</CardTitle>
+          <p className="text-xs text-muted-foreground">
+            Klikněte na řádek pro zobrazení detailu vyúčtování daného čísla.
+          </p>
         </CardHeader>
         <CardContent>
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-8"></TableHead>
                 <TableHead>Telefon</TableHead>
                 <TableHead className="text-right">Paušál</TableHead>
                 <TableHead className="text-right">Ostatní provoz</TableHead>
@@ -179,14 +213,89 @@ function InvoiceDetailPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {lines.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.phone_number}</TableCell>
-                  <TableCell className="text-right">{Number(l.pausal).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">{Number(l.other_traffic).toFixed(2)}</TableCell>
-                  <TableCell className="text-right">{Number(l.total).toFixed(2)}</TableCell>
-                </TableRow>
-              ))}
+              {lines.map((l) => {
+                const isOpen = expanded.has(l.id);
+                const raw = (l.raw_json ?? {}) as { items?: PolItem[] };
+                const items: PolItem[] = Array.isArray(raw.items) ? raw.items : [];
+                return (
+                  <>
+                    <TableRow
+                      key={l.id}
+                      className="cursor-pointer"
+                      onClick={() => toggleRow(l.id)}
+                    >
+                      <TableCell>
+                        {isOpen ? (
+                          <ChevronDown className="h-4 w-4" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4" />
+                        )}
+                      </TableCell>
+                      <TableCell className="font-medium">{l.phone_number}</TableCell>
+                      <TableCell className="text-right">
+                        {Number(l.pausal).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(l.other_traffic).toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right">
+                        {Number(l.total).toFixed(2)}
+                      </TableCell>
+                    </TableRow>
+                    {isOpen && (
+                      <TableRow key={`${l.id}-detail`} className="bg-muted/40 hover:bg-muted/40">
+                        <TableCell></TableCell>
+                        <TableCell colSpan={4}>
+                          {items.length === 0 ? (
+                            <p className="text-sm text-muted-foreground py-2">
+                              Žádné detailní položky.
+                            </p>
+                          ) : (
+                            <Table>
+                              <TableHeader>
+                                <TableRow>
+                                  <TableHead>Položka</TableHead>
+                                  <TableHead>Typ</TableHead>
+                                  <TableHead className="text-right">Počet</TableHead>
+                                  <TableHead>Jedn.</TableHead>
+                                  <TableHead className="text-right">Cena</TableHead>
+                                  <TableHead className="text-right">Celkem</TableHead>
+                                </TableRow>
+                              </TableHeader>
+                              <TableBody>
+                                {items.map((it, i) => (
+                                  <TableRow key={i}>
+                                    <TableCell className="text-sm">
+                                      {it.description || "—"}
+                                    </TableCell>
+                                    <TableCell className="text-xs text-muted-foreground">
+                                      {it.feature || "—"}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {it.quantity != null
+                                        ? Number(it.quantity).toLocaleString("cs-CZ", {
+                                            maximumFractionDigits: 3,
+                                          })
+                                        : "—"}
+                                    </TableCell>
+                                    <TableCell>{it.unit || "—"}</TableCell>
+                                    <TableCell className="text-right">
+                                      {it.unitPrice != null ? Number(it.unitPrice).toFixed(2) : "—"}
+                                    </TableCell>
+                                    <TableCell className="text-right">
+                                      {it.total != null ? Number(it.total).toFixed(2) : "—"}
+                                    </TableCell>
+                                  </TableRow>
+                                ))}
+                              </TableBody>
+                            </Table>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                );
+              })}
             </TableBody>
           </Table>
         </CardContent>
