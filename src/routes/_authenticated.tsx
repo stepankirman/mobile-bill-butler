@@ -2,7 +2,7 @@ import { createFileRoute, redirect, Outlet, Link, useNavigate } from "@tanstack/
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { Upload, History, LogOut } from "lucide-react";
+import { Upload, History, LogOut, Settings } from "lucide-react";
 
 export const Route = createFileRoute("/_authenticated")({
   ssr: false,
@@ -42,6 +42,11 @@ function AuthenticatedLayout() {
             <Button asChild variant="ghost" size="sm">
               <Link to="/invoices">
                 <History className="mr-2 h-4 w-4" /> Historie
+              </Link>
+            </Button>
+            <Button asChild variant="ghost" size="sm">
+              <Link to="/settings">
+                <Settings className="mr-2 h-4 w-4" /> Nastavení
               </Link>
             </Button>
             {email && <span className="ml-2 text-xs text-muted-foreground">{email}</span>}

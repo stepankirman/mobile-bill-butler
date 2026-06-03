@@ -1,11 +1,21 @@
 import { normalizePhone } from "../phone";
+import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
-// Public sheet — fetched live on each upload.
-const SPREADSHEET_ID = "1T8z5q4TLm5kx0ziEldlyN-PKj0HQsQnw4JrbZIE-JuM";
-const SHEET_NAME = "mob sim 7/2024";
+export interface SheetConfig {
+  spreadsheet_id: string;
+  sheet_name: string;
+  phone_column: number; // 0-based
+  client_id_column: number; // 0-based
+}
+
+export const DEFAULT_SHEET_CONFIG: SheetConfig = {
+  spreadsheet_id: "1T8z5q4TLm5kx0ziEldlyN-PKj0HQsQnw4JrbZIE-JuM",
+  sheet_name: "mob sim 7/2024",
+  phone_column: 2,
+  client_id_column: 3,
+};
 
 export interface SheetMapping {
-  // normalized phone -> CF-control client ID
   byPhone: Map<string, string>;
 }
 
@@ -45,9 +55,30 @@ function parseCsv(text: string): string[][] {
   return rows;
 }
 
-export async function fetchSheetMapping(): Promise<SheetMapping> {
-  const url = `https://docs.google.com/spreadsheets/d/${SPREADSHEET_ID}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
-    SHEET_NAME,
+export async function loadSheetConfig(): Promise<SheetConfig> {
+  const { data } = await supabaseAdmin
+    .from("app_settings")
+    .select("value")
+    .eq("key", "google_sheet")
+    .maybeSingle();
+  const v = (data?.value ?? {}) as Partial<SheetConfig>;
+  return {
+    spreadsheet_id: v.spreadsheet_id || DEFAULT_SHEET_CONFIG.spreadsheet_id,
+    sheet_name: v.sheet_name || DEFAULT_SHEET_CONFIG.sheet_name,
+    phone_column: typeof v.phone_column === "number" ? v.phone_column : DEFAULT_SHEET_CONFIG.phone_column,
+    client_id_column:
+      typeof v.client_id_column === "number" ? v.client_id_column : DEFAULT_SHEET_CONFIG.client_id_column,
+  };
+}
+
+export function parseSpreadsheetIdFromUrlOrId(input: string): string {
+  const m = input.match(/\/spreadsheets\/d\/([a-zA-Z0-9_-]+)/);
+  return m ? m[1] : input.trim();
+}
+
+export async function fetchSheetMappingWith(config: SheetConfig): Promise<SheetMapping & { rowCount: number; sampleHeader: string[] }> {
+  const url = `https://docs.google.com/spreadsheets/d/${config.spreadsheet_id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
+    config.sheet_name,
   )}`;
   const res = await fetch(url);
   if (!res.ok) {
@@ -56,12 +87,16 @@ export async function fetchSheetMapping(): Promise<SheetMapping> {
   const text = await res.text();
   const rows = parseCsv(text);
   const byPhone = new Map<string, string>();
-  // Column C = phone (index 2), Column D = client ID (index 3). Skip header row.
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    const phone = normalizePhone(r[2] ?? "");
-    const clientId = String(r[3] ?? "").trim();
+    const phone = normalizePhone(r[config.phone_column] ?? "");
+    const clientId = String(r[config.client_id_column] ?? "").trim();
     if (phone && clientId) byPhone.set(phone, clientId);
   }
-  return { byPhone };
+  return { byPhone, rowCount: rows.length, sampleHeader: rows[0] ?? [] };
+}
+
+export async function fetchSheetMapping(): Promise<SheetMapping> {
+  const cfg = await loadSheetConfig();
+  return fetchSheetMappingWith(cfg);
 }
