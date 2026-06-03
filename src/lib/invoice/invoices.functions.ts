@@ -147,6 +147,32 @@ export const listInvoices = createServerFn({ method: "GET" })
     return { invoices: data ?? [] };
   });
 
+export const deleteInvoices = createServerFn({ method: "POST" })
+  .middleware([requireSupabaseAuth])
+  .inputValidator(z.object({ ids: z.array(z.string().uuid()).min(1).max(500) }))
+  .handler(async ({ data }) => {
+    const [{ data: invs }, { data: cis }] = await Promise.all([
+      supabaseAdmin.from("invoices").select("pdf_storage_path").in("id", data.ids),
+      supabaseAdmin.from("customer_invoices").select("pdf_storage_path").in("invoice_id", data.ids),
+    ]);
+    const paths = [
+      ...(invs ?? []).map((r) => r.pdf_storage_path).filter((p): p is string => !!p),
+      ...(cis ?? []).map((r) => r.pdf_storage_path).filter((p): p is string => !!p),
+    ];
+    if (paths.length > 0) {
+      await supabaseAdmin.storage.from(PDF_BUCKET).remove(paths);
+    }
+    const [{ error: e1 }, { error: e2 }] = await Promise.all([
+      supabaseAdmin.from("invoice_lines").delete().in("invoice_id", data.ids),
+      supabaseAdmin.from("customer_invoices").delete().in("invoice_id", data.ids),
+    ]);
+    if (e1) throw new Error(e1.message);
+    if (e2) throw new Error(e2.message);
+    const { error: e3 } = await supabaseAdmin.from("invoices").delete().in("id", data.ids);
+    if (e3) throw new Error(e3.message);
+    return { deleted: data.ids.length };
+  });
+
 export const getInvoiceDetail = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ id: z.string().uuid() }))
