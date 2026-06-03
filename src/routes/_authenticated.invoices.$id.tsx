@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -218,9 +218,8 @@ function InvoiceDetailPage() {
                 const raw = (l.raw_json ?? {}) as { items?: PolItem[] };
                 const items: PolItem[] = Array.isArray(raw.items) ? raw.items : [];
                 return (
-                  <>
+                  <Fragment key={l.id}>
                     <TableRow
-                      key={l.id}
                       className="cursor-pointer"
                       onClick={() => toggleRow(l.id)}
                     >
@@ -243,7 +242,7 @@ function InvoiceDetailPage() {
                       </TableCell>
                     </TableRow>
                     {isOpen && (
-                      <TableRow key={`${l.id}-detail`} className="bg-muted/40 hover:bg-muted/40">
+                      <TableRow className="bg-muted/40 hover:bg-muted/40">
                         <TableCell></TableCell>
                         <TableCell colSpan={4}>
                           {items.length === 0 ? (
@@ -293,7 +292,7 @@ function InvoiceDetailPage() {
                         </TableCell>
                       </TableRow>
                     )}
-                  </>
+                  </Fragment>
                 );
               })}
             </TableBody>
