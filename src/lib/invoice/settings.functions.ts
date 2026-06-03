@@ -35,7 +35,7 @@ export const saveSheetSettings = createServerFn({ method: "POST" })
     };
     const { error } = await supabaseAdmin
       .from("app_settings")
-      .upsert({ key: "google_sheet", value: config, updated_at: new Date().toISOString() });
+      .upsert({ key: "google_sheet", value: config as unknown as Record<string, unknown>, updated_at: new Date().toISOString() });
     if (error) throw new Error(error.message);
     return { config };
   });
