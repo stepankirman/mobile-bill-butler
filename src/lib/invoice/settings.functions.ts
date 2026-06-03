@@ -21,6 +21,7 @@ const SaveSchema = z.object({
   sheet_name: z.string().min(1).max(200),
   phone_column: z.number().int().min(0).max(50),
   client_id_column: z.number().int().min(0).max(50),
+  name_column: z.number().int().min(0).max(50),
 });
 
 export const saveSheetSettings = createServerFn({ method: "POST" })
@@ -32,6 +33,7 @@ export const saveSheetSettings = createServerFn({ method: "POST" })
       sheet_name: data.sheet_name,
       phone_column: data.phone_column,
       client_id_column: data.client_id_column,
+      name_column: data.name_column,
     };
     const { error } = await supabaseAdmin
       .from("app_settings")
@@ -53,16 +55,22 @@ export const testSheetSettings = createServerFn({ method: "POST" })
           sheet_name: data.sheet_name ?? stored.sheet_name,
           phone_column: data.phone_column ?? stored.phone_column,
           client_id_column: data.client_id_column ?? stored.client_id_column,
+          name_column: data.name_column ?? stored.name_column,
         }
       : stored;
     try {
       const result = await fetchSheetMappingWith(config);
       const samples = Array.from(result.byPhone.entries())
         .slice(0, 5)
-        .map(([phone, clientId]) => ({ phone, clientId }));
+        .map(([phone, clientId]) => ({
+          phone,
+          clientId,
+          name: result.byPhoneName.get(phone) ?? "",
+        }));
       return {
         ok: true as const,
         mappingCount: result.byPhone.size,
+        nameCount: result.byPhoneName.size,
         totalRows: result.rowCount,
         headerRow: result.sampleHeader,
         samples,
