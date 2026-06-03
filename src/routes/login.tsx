@@ -1,4 +1,4 @@
-import { createFileRoute, useNavigate, redirect } from "@tanstack/react-router";
+import { createFileRoute, useNavigate, redirect, Link } from "@tanstack/react-router";
 import { useState, type FormEvent } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -98,6 +98,14 @@ function LoginPage() {
                 ? "Účet ještě neexistuje? Vytvořte sdílený účet"
                 : "Už máte účet? Přihlásit se"}
             </button>
+            {mode === "login" && (
+              <Link
+                to="/forgot-password"
+                className="block text-center text-xs text-muted-foreground hover:underline"
+              >
+                Zapomenuté heslo?
+              </Link>
+            )}
           </form>
         </CardContent>
       </Card>
