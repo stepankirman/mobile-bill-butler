@@ -102,6 +102,7 @@ function InvoiceDetailPage() {
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead>Jméno</TableHead>
                 <TableHead>CF-control ID</TableHead>
                 <TableHead>Telefony</TableHead>
                 <TableHead className="text-right">Částka</TableHead>
@@ -112,6 +113,7 @@ function InvoiceDetailPage() {
             <TableBody>
               {customers.map((c) => (
                 <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.client_name ?? <span className="text-muted-foreground">—</span>}</TableCell>
                   <TableCell>{c.cf_control_client_id ?? <span className="text-destructive">nenamapováno</span>}</TableCell>
                   <TableCell className="text-xs">{c.phone_numbers.join(", ")}</TableCell>
                   <TableCell className="text-right">
