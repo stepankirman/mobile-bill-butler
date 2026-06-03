@@ -1,8 +1,7 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ParsedInvoice, ParsedInvoiceLine } from "./parser.server";
 
-// pdf-lib's StandardFonts (WinAnsi) lack many Czech glyphs; we strip diacritics
-// to avoid encoding errors. Sufficient for an internal billing summary.
+// pdf-lib's StandardFonts (WinAnsi) lack many Czech glyphs; strip diacritics.
 function ascii(s: string): string {
   return s
     .normalize("NFD")
@@ -17,105 +16,162 @@ function fmt(n: number): string {
 export interface InvoicePdfInput {
   invoice: ParsedInvoice;
   clientLabel?: string | null;
+  clientName?: string | null;
   lines: ParsedInvoiceLine[];
 }
 
 export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Array> {
-  const { invoice, clientLabel, lines } = input;
+  const { invoice, clientLabel, clientName, lines } = input;
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);
   const fontBold = await doc.embedFont(StandardFonts.HelveticaBold);
 
-  let page = doc.addPage([595.28, 841.89]); // A4
-  const { width, height } = page.getSize();
+  const PAGE_W = 595.28;
+  const PAGE_H = 841.89;
   const margin = 40;
-  let y = height - margin;
 
-  const draw = (text: string, opts?: { bold?: boolean; size?: number; x?: number }) => {
+  let page = doc.addPage([PAGE_W, PAGE_H]);
+  let y = PAGE_H - margin;
+
+  function ensureSpace(needed: number) {
+    if (y - needed < margin + 20) {
+      page = doc.addPage([PAGE_W, PAGE_H]);
+      y = PAGE_H - margin;
+    }
+  }
+
+  function text(s: string, opts?: { bold?: boolean; size?: number; x?: number; color?: [number, number, number] }) {
     const size = opts?.size ?? 10;
     const f = opts?.bold ? fontBold : font;
-    page.drawText(ascii(text), {
-      x: opts?.x ?? margin,
-      y,
-      size,
-      font: f,
-      color: rgb(0, 0, 0),
-    });
-  };
+    const [r, g, b] = opts?.color ?? [0, 0, 0];
+    page.drawText(ascii(s), { x: opts?.x ?? margin, y, size, font: f, color: rgb(r, g, b) });
+  }
 
-  draw(`Vyuctovani mobilnich sluzeb`, { bold: true, size: 16 });
+  // Header
+  text("Vyuctovani mobilnich sluzeb", { bold: true, size: 16 });
   y -= 22;
-  draw(`Faktura c. ${invoice.number}`, { bold: true, size: 12 });
+  text(`Faktura c. ${invoice.number}`, { bold: true, size: 12 });
   y -= 16;
   if (invoice.supplier) {
-    draw(`Dodavatel: ${invoice.supplier}`);
+    text(`Dodavatel: ${invoice.supplier}`);
     y -= 14;
   }
   if (invoice.issuedAt) {
-    draw(`Datum vystaveni: ${invoice.issuedAt}`);
+    text(`Datum vystaveni: ${invoice.issuedAt}`);
+    y -= 14;
+  }
+  const displayName = clientName || invoice.customer.fullName;
+  if (displayName) {
+    text(`Klient: ${displayName}`, { bold: true });
     y -= 14;
   }
   if (clientLabel) {
-    draw(`Klient (CF-control ID): ${clientLabel}`);
+    text(`CF-control ID: ${clientLabel}`);
     y -= 14;
   }
+
+  // Recompute totals for this client (so per-client PDFs are correct).
+  const sumBaseClient = lines.reduce((s, l) => s + l.total, 0);
+  const vatRate = invoice.vatRate || 21;
+  // If we're rendering the master PDF (lines == invoice.lines), use header amounts;
+  // otherwise compute VAT from line totals.
+  const isMaster = lines.length === invoice.lines.length &&
+    Math.abs(sumBaseClient - invoice.totalAmount) < 0.01;
+  const baseAmount = isMaster ? invoice.totalAmount : sumBaseClient;
+  const vatAmount = isMaster ? invoice.vatAmount : baseAmount * (vatRate / 100);
+  const totalWithVat = isMaster ? invoice.totalWithVat : baseAmount + vatAmount;
+
   y -= 6;
-  draw(`Celkem bez DPH: ${fmt(invoice.totalAmount)} ${invoice.currency}`);
+  // VAT summary box
+  ensureSpace(70);
+  const boxX = margin;
+  const boxY = y - 60;
+  const boxW = PAGE_W - margin * 2;
+  page.drawRectangle({
+    x: boxX,
+    y: boxY,
+    width: boxW,
+    height: 60,
+    borderColor: rgb(0.7, 0.7, 0.7),
+    borderWidth: 0.5,
+  });
+  const labelX = margin + 10;
+  const valueX = PAGE_W - margin - 10;
+  function rightText(s: string, opts?: { bold?: boolean; size?: number }) {
+    const size = opts?.size ?? 10;
+    const f = opts?.bold ? fontBold : font;
+    const w = f.widthOfTextAtSize(ascii(s), size);
+    page.drawText(ascii(s), { x: valueX - w, y, size, font: f });
+  }
+  y -= 18;
+  text("Zaklad dane (bez DPH):", { x: labelX });
+  rightText(`${fmt(baseAmount)} ${invoice.currency}`);
   y -= 14;
-  draw(`Celkem s DPH: ${fmt(invoice.totalWithVat)} ${invoice.currency}`, { bold: true });
+  text(`DPH ${fmt(vatRate)} %:`, { x: labelX });
+  rightText(`${fmt(vatAmount)} ${invoice.currency}`);
+  y -= 14;
+  text("Celkem k uhrade vc. DPH:", { x: labelX, bold: true, size: 11 });
+  rightText(`${fmt(totalWithVat)} ${invoice.currency}`, { bold: true, size: 11 });
   y -= 24;
 
-  draw(`Rozpis SIM karet`, { bold: true, size: 12 });
-  y -= 18;
+  // Per-SIM detail with all items
+  text(`Rozpis SIM karet (${lines.length})`, { bold: true, size: 12 });
+  y -= 16;
 
-  // Table header
-  const cols = [
-    { label: "Cislo", x: margin, w: 110 },
-    { label: "Pausal", x: margin + 120, w: 90 },
-    { label: "Ostatni provoz", x: margin + 220, w: 120 },
-    { label: "Celkem", x: margin + 360, w: 90 },
-  ];
-  for (const c of cols) {
-    page.drawText(ascii(c.label), { x: c.x, y, size: 10, font: fontBold });
-  }
-  y -= 4;
-  page.drawLine({
-    start: { x: margin, y },
-    end: { x: width - margin, y },
-    thickness: 0.5,
-    color: rgb(0, 0, 0),
-  });
-  y -= 12;
-
-  let sumPausal = 0;
-  let sumOther = 0;
-  let sumTotal = 0;
   for (const line of lines) {
-    if (y < margin + 60) {
-      page = doc.addPage([595.28, 841.89]);
-      y = page.getSize().height - margin;
-    }
-    page.drawText(ascii(line.phone || "-"), { x: cols[0].x, y, size: 10, font });
-    page.drawText(fmt(line.pausal), { x: cols[1].x, y, size: 10, font });
-    page.drawText(fmt(line.otherTraffic), { x: cols[2].x, y, size: 10, font });
-    page.drawText(fmt(line.total), { x: cols[3].x, y, size: 10, font });
-    sumPausal += line.pausal;
-    sumOther += line.otherTraffic;
-    sumTotal += line.total;
-    y -= 14;
-  }
+    ensureSpace(40 + line.items.length * 12);
+    // SIM header
+    page.drawRectangle({
+      x: margin,
+      y: y - 14,
+      width: PAGE_W - margin * 2,
+      height: 16,
+      color: rgb(0.95, 0.95, 0.97),
+    });
+    text(`Telefon: ${line.phone || "-"}`, { bold: true });
+    const totLabel = `${fmt(line.total)} ${invoice.currency}`;
+    const w = fontBold.widthOfTextAtSize(ascii(totLabel), 10);
+    page.drawText(ascii(totLabel), { x: PAGE_W - margin - 10 - w, y, size: 10, font: fontBold });
+    y -= 18;
 
-  y -= 6;
-  page.drawLine({
-    start: { x: margin, y },
-    end: { x: width - margin, y },
-    thickness: 0.5,
-  });
-  y -= 14;
-  page.drawText("Soucet", { x: cols[0].x, y, size: 10, font: fontBold });
-  page.drawText(fmt(sumPausal), { x: cols[1].x, y, size: 10, font: fontBold });
-  page.drawText(fmt(sumOther), { x: cols[2].x, y, size: 10, font: fontBold });
-  page.drawText(fmt(sumTotal), { x: cols[3].x, y, size: 10, font: fontBold });
+    // Item rows
+    const cols = {
+      desc: { x: margin + 6, w: 320 },
+      qty: { x: margin + 330, w: 55 },
+      unit: { x: margin + 388, w: 35 },
+      price: { x: margin + 430, w: 50 },
+      total: { x: PAGE_W - margin - 10 },
+    };
+    // Sub-header
+    page.drawText("Polozka", { x: cols.desc.x, y, size: 8, font: fontBold });
+    page.drawText("Pocet", { x: cols.qty.x, y, size: 8, font: fontBold });
+    page.drawText("Jedn.", { x: cols.unit.x, y, size: 8, font: fontBold });
+    page.drawText("Cena", { x: cols.price.x, y, size: 8, font: fontBold });
+    const totHdr = "Celkem";
+    const totHdrW = fontBold.widthOfTextAtSize(totHdr, 8);
+    page.drawText(totHdr, { x: cols.total.x - totHdrW, y, size: 8, font: fontBold });
+    y -= 10;
+
+    if (line.items.length === 0) {
+      page.drawText("(zadne polozky)", { x: cols.desc.x, y, size: 9, font, color: rgb(0.5, 0.5, 0.5) });
+      y -= 12;
+    } else {
+      for (const it of line.items) {
+        ensureSpace(14);
+        const desc = it.description || it.feature || "—";
+        const truncated = desc.length > 60 ? desc.slice(0, 57) + "..." : desc;
+        page.drawText(ascii(truncated), { x: cols.desc.x, y, size: 9, font });
+        page.drawText(ascii(it.quantity ? String(it.quantity) : "—"), { x: cols.qty.x, y, size: 9, font });
+        page.drawText(ascii(it.unit || "—"), { x: cols.unit.x, y, size: 9, font });
+        page.drawText(ascii(fmt(it.unitPrice)), { x: cols.price.x, y, size: 9, font });
+        const totalStr = fmt(it.total);
+        const tw = font.widthOfTextAtSize(totalStr, 9);
+        page.drawText(totalStr, { x: cols.total.x - tw, y, size: 9, font });
+        y -= 12;
+      }
+    }
+    y -= 8;
+  }
 
   return await doc.save();
 }

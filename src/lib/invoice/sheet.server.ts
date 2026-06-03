@@ -6,6 +6,7 @@ export interface SheetConfig {
   sheet_name: string;
   phone_column: number; // 0-based
   client_id_column: number; // 0-based
+  name_column: number; // 0-based — column containing customer name
 }
 
 export const DEFAULT_SHEET_CONFIG: SheetConfig = {
@@ -13,10 +14,13 @@ export const DEFAULT_SHEET_CONFIG: SheetConfig = {
   sheet_name: "mob sim 7/2024",
   phone_column: 2,
   client_id_column: 3,
+  name_column: 4,
 };
 
 export interface SheetMapping {
   byPhone: Map<string, string>;
+  byPhoneName: Map<string, string>;
+  byClientName: Map<string, string>;
 }
 
 function parseCsv(text: string): string[][] {
@@ -68,6 +72,7 @@ export async function loadSheetConfig(): Promise<SheetConfig> {
     phone_column: typeof v.phone_column === "number" ? v.phone_column : DEFAULT_SHEET_CONFIG.phone_column,
     client_id_column:
       typeof v.client_id_column === "number" ? v.client_id_column : DEFAULT_SHEET_CONFIG.client_id_column,
+    name_column: typeof v.name_column === "number" ? v.name_column : DEFAULT_SHEET_CONFIG.name_column,
   };
 }
 
@@ -76,7 +81,9 @@ export function parseSpreadsheetIdFromUrlOrId(input: string): string {
   return m ? m[1] : input.trim();
 }
 
-export async function fetchSheetMappingWith(config: SheetConfig): Promise<SheetMapping & { rowCount: number; sampleHeader: string[] }> {
+export async function fetchSheetMappingWith(
+  config: SheetConfig,
+): Promise<SheetMapping & { rowCount: number; sampleHeader: string[] }> {
   const url = `https://docs.google.com/spreadsheets/d/${config.spreadsheet_id}/gviz/tq?tqx=out:csv&sheet=${encodeURIComponent(
     config.sheet_name,
   )}`;
@@ -87,13 +94,18 @@ export async function fetchSheetMappingWith(config: SheetConfig): Promise<SheetM
   const text = await res.text();
   const rows = parseCsv(text);
   const byPhone = new Map<string, string>();
+  const byPhoneName = new Map<string, string>();
+  const byClientName = new Map<string, string>();
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     const phone = normalizePhone(r[config.phone_column] ?? "");
     const clientId = String(r[config.client_id_column] ?? "").trim();
+    const name = String(r[config.name_column] ?? "").trim();
     if (phone && clientId) byPhone.set(phone, clientId);
+    if (phone && name) byPhoneName.set(phone, name);
+    if (clientId && name && !byClientName.has(clientId)) byClientName.set(clientId, name);
   }
-  return { byPhone, rowCount: rows.length, sampleHeader: rows[0] ?? [] };
+  return { byPhone, byPhoneName, byClientName, rowCount: rows.length, sampleHeader: rows[0] ?? [] };
 }
 
 export async function fetchSheetMapping(): Promise<SheetMapping> {
