@@ -65,18 +65,26 @@ function InvoiceDetailPage() {
   return (
     <div className="space-y-6">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
             <CardTitle>Faktura {invoice.xml_number}</CardTitle>
             <p className="mt-1 text-sm text-muted-foreground">
               {invoice.supplier ?? "—"} · vystaveno {invoice.issued_at ?? "—"}
             </p>
           </div>
-          <div className="text-right">
+          <div className="text-right space-y-1">
+            <p className="text-xs text-muted-foreground">Bez DPH</p>
+            <p className="text-sm">
+              {Number(invoice.total_amount).toFixed(2)} {invoice.currency}
+            </p>
+            <p className="text-xs text-muted-foreground">DPH</p>
+            <p className="text-sm">
+              {(Number(invoice.total_with_vat) - Number(invoice.total_amount)).toFixed(2)} {invoice.currency}
+            </p>
+            <p className="text-xs text-muted-foreground">Celkem s DPH</p>
             <p className="text-2xl font-semibold">
               {Number(invoice.total_with_vat).toFixed(2)} {invoice.currency}
             </p>
-            <p className="text-xs text-muted-foreground">vč. DPH</p>
           </div>
         </CardHeader>
         <CardContent>
