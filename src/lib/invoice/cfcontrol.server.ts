@@ -1,7 +1,6 @@
-// Thin wrapper around the CF-control REST API. Endpoint paths are configurable
-// because the published Bitbucket Api.php exposes several receivable/email
-// endpoints; we follow the most common convention (POST /receivables, POST
-// /clients/{id}/notify). Adjust if your CF-control instance differs.
+// Thin wrapper around the CF-control API. The settings test uses the older v1
+// PHP client contract: one endpoint URL, `action` + `settings` query params,
+// and the `Cf-API-Authorization` header.
 
 import { supabaseAdmin } from "@/integrations/supabase/client.server";
 
@@ -19,7 +18,7 @@ export async function loadCfControlConfig(): Promise<CfControlConfig> {
   const v = (data?.value ?? {}) as Partial<CfControlConfig>;
   return {
     base_url: (v.base_url || process.env.CF_CONTROL_API_BASE_URL || "").trim(),
-    api_key: (v.api_key || process.env.CF_CONTROL_API_KEY || "").trim(),
+    api_key: (process.env.CF_CONTROL_API_KEY || v.api_key || "").trim(),
   };
 }
 
@@ -112,55 +111,147 @@ export interface CfTestResult {
   bodyPreview?: string;
   error?: string;
   message?: string;
-  details?: Array<{ field?: string; message?: string }>;
+  details?: Array<{ key?: string; field?: string; message?: string }>;
   testedPath?: string;
   testedUrl?: string;
   clientsCount?: number;
   clients?: CfTestClient[];
 }
 
-function buildCfControlUrl(baseUrl: string, path: string, query: URLSearchParams): string {
+function appendCfSetting(query: URLSearchParams, key: string, value: unknown): void {
+  if (value === undefined || value === null) return;
+  if (Array.isArray(value)) {
+    value.forEach((item, index) => appendCfSetting(query, `${key}[${index}]`, item));
+    return;
+  }
+  if (typeof value === "object") {
+    Object.entries(value as Record<string, unknown>).forEach(([childKey, childValue]) => {
+      appendCfSetting(query, `${key}[${childKey}]`, childValue);
+    });
+    return;
+  }
+  query.append(key, String(value));
+}
+
+function buildCfControlV1Url(baseUrl: string, action: string, settings: Record<string, unknown>): string {
   const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
-  const url = base + path.replace(/^\/+/, "");
-  const qs = query.toString();
-  return qs ? `${url}?${qs}` : url;
+  const query = new URLSearchParams();
+  query.set("action", action);
+  Object.entries(settings).forEach(([key, value]) => appendCfSetting(query, `settings[${key}]`, value));
+  return `${base}?${query.toString()}`;
+}
+
+function parseCfControlV1Input(input?: string): { action: string; settings: Record<string, unknown> } {
+  const raw = input?.trim() || "/customer/list";
+  const normalized = raw;
+  const [actionPart, queryStr] = normalized.split("?", 2);
+  const settings: Record<string, unknown> = {};
+  if (!input?.trim()) {
+    settings.fields = ["id", "contractNumber", "nameFull", "phone", "email", "address", "tarif", "transmitter", "paymentStatus"];
+  }
+
+  if (queryStr) {
+    const params = new URLSearchParams(queryStr);
+    params.forEach((value, key) => {
+      const match = key.match(/^settings\[([^\]]+)\]$/);
+      settings[match?.[1] ?? key] = value;
+    });
+  }
+
+  return { action: actionPart || "customer/list", settings };
+}
+
+function parseCfControlJson(text: string): unknown | null {
+  try {
+    return text ? JSON.parse(text.replace(/^\uFEFF/, "").replace("\\xEF\\xBB\\xBF", "")) : null;
+  } catch {
+    return null;
+  }
+}
+
+async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: number; statusText: string; text: string }> {
+  const target = new URL(url);
+  if (target.protocol !== "https:" && target.protocol !== "http:") {
+    const res = await fetch(url, { headers: { "Cf-API-Authorization": apiKey } });
+    return { status: res.status, statusText: res.statusText, text: await res.text() };
+  }
+
+  const client = target.protocol === "https:" ? await import("node:https") : await import("node:http");
+  return new Promise((resolve, reject) => {
+    const request = client.request(
+      target,
+      {
+        method: "GET",
+        timeout: 10000,
+        headers: {
+          Accept: "application/json",
+          "User-Agent": "TeamCity-Invoice-App/1.0",
+          "Cf-API-Authorization": apiKey,
+        },
+      },
+      (response) => {
+        let text = "";
+        response.setEncoding("utf8");
+        response.on("data", (chunk) => {
+          text += chunk;
+        });
+        response.on("end", () => {
+          resolve({
+            status: response.statusCode ?? 0,
+            statusText: response.statusMessage ?? "",
+            text,
+          });
+        });
+      },
+    );
+    request.once("timeout", () => {
+      request.destroy(new Error("Timeout při volání CF-control API."));
+    });
+    request.once("error", reject);
+    request.end();
+  });
+}
+
+function extractCfApiErrors(data: unknown): Array<{ key?: string; field?: string; message?: string }> {
+  if (!data || typeof data !== "object") return [];
+  const error = (data as Record<string, unknown>).error;
+  const list = Array.isArray(error) ? error : error && typeof error === "object" ? [error] : [];
+  return list.map((item) => {
+    const obj = (item ?? {}) as Record<string, unknown>;
+    return {
+      key: typeof obj.key === "string" ? obj.key : undefined,
+      field: typeof obj.field === "string" ? obj.field : undefined,
+      message:
+        typeof obj.message === "string"
+          ? obj.message
+          : typeof obj.text === "string"
+            ? obj.text
+            : undefined,
+    };
+  });
 }
 
 /**
- * Mirror of the PHP `CfControl\Api->get('/customer/list', ['limit' => 10])`
- * call used in test_clients.php — same URL composition, Authorization-only
- * GET header, JSON requirement and error envelope handling.
+ * Mirror of the PHP v1 `CfControl\Api->get('customer/list', ['limit' => 10])`:
+ * GET `${apiUrl}?action=customer%2Flist&settings%5Blimit%5D=10` with the
+ * `Cf-API-Authorization` header, then parse the v1 JSON envelope.
  */
 export async function testCfControl(
   override?: Partial<CfControlConfig>,
-  customPath?: string,
+  customAction?: string,
 ): Promise<CfTestResult> {
   const stored = await loadCfControlConfig();
-  let base = (override?.base_url ?? stored.base_url).trim();
+  const base = (override?.base_url ?? stored.base_url).trim();
   const key = (override?.api_key ?? stored.api_key).trim();
   if (!base) return { ok: false, error: "Chybí URL." };
   if (!key) return { ok: false, error: "Chybí API klíč." };
-  const customInput = customPath?.trim();
-  const rawPath = customInput || "/customer/list";
-  const [pathOnly, queryStr] = rawPath.split("?", 2);
-  const query = new URLSearchParams(queryStr ?? "");
-  if (!customInput) query.set("limit", "10");
-  const url = buildCfControlUrl(base, pathOnly, query);
+  const { action, settings } = parseCfControlV1Input(customAction);
+  const url = buildCfControlV1Url(base, action, settings);
 
   try {
-    const res = await fetch(url, {
-      method: "GET",
-      headers: {
-        Authorization: `Bearer ${key}`,
-      },
-    });
-    const txt = await res.text();
-    let parsed: unknown = null;
-    try {
-      parsed = txt ? JSON.parse(txt) : null;
-    } catch {
-      parsed = null;
-    }
+    const res = await cfControlV1Get(url, key);
+    const txt = res.text;
+    const parsed = parseCfControlJson(txt);
 
     if (!parsed) {
       return {
@@ -168,54 +259,52 @@ export async function testCfControl(
         status: 0,
         statusText: res.statusText,
         bodyPreview: txt.slice(0, 800),
-        testedPath: rawPath,
+        testedPath: action,
         testedUrl: url,
         error: "transport",
         message: `Odpověď není validní JSON (HTTP ${res.status}).`,
       };
     }
 
-    if (res.ok) {
+    const env = (parsed ?? {}) as Record<string, unknown>;
+    const details = extractCfApiErrors(parsed);
+    const result = typeof env.result === "string" ? env.result : undefined;
+    const apiOk = res.status >= 200 && res.status < 300 && result !== "CF_API_RESULT_ERROR" && details.length === 0;
+
+    if (apiOk) {
       const list = extractClientList(parsed).slice(0, 10);
       return {
         ok: true,
         status: res.status,
         statusText: res.statusText,
         bodyPreview: txt.slice(0, 800),
-        testedPath: rawPath,
+        testedPath: action,
         testedUrl: url,
         clientsCount: list.length,
         clients: list,
       };
     }
 
-    const env = (parsed ?? {}) as Record<string, unknown>;
-    const errorCode = typeof env.error === "string" ? env.error : undefined;
-    const errorMsg = typeof env.message === "string" ? env.message : undefined;
-    const details = Array.isArray(env.details)
-      ? (env.details as Array<Record<string, unknown>>).map((d) => ({
-          field: typeof d.field === "string" ? d.field : undefined,
-          message: typeof d.message === "string" ? d.message : undefined,
-        }))
-      : undefined;
+    const errorCode = details[0]?.key ?? (typeof env.error === "string" ? env.error : undefined);
+    const errorMsg = details[0]?.message ?? (typeof env.message === "string" ? env.message : undefined);
 
     return {
       ok: false,
       status: res.status,
       statusText: res.statusText,
       bodyPreview: txt.slice(0, 800),
-      testedPath: rawPath,
+      testedPath: action,
       testedUrl: url,
       error: errorCode ?? `HTTP ${res.status} ${res.statusText}`,
       message: errorMsg,
-      details,
+      details: details.length ? details : undefined,
     };
   } catch (e) {
     return {
       ok: false,
       error: "transport",
       message: e instanceof Error ? e.message : String(e),
-      testedPath: rawPath,
+      testedPath: action,
       testedUrl: url,
     };
   }
@@ -260,5 +349,3 @@ function extractClientList(data: unknown): CfTestClient[] {
     };
   });
 }
-
-
