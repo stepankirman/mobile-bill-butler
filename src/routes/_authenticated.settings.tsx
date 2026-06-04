@@ -32,13 +32,17 @@ function SettingsPage() {
 
   const [cfUrl, setCfUrl] = useState("");
   const [cfKey, setCfKey] = useState("");
+  const [cfQueue, setCfQueue] = useState<number>(1);
 
   useEffect(() => {
-    if (cfData) setCfUrl(cfData.base_url ?? "");
+    if (cfData) {
+      setCfUrl(cfData.base_url ?? "");
+      setCfQueue(cfData.invoice_number_queue ?? 1);
+    }
   }, [cfData]);
 
   const saveCfMut = useMutation({
-    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey } }),
+    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey, invoice_number_queue: cfQueue } }),
     onSuccess: () => {
       toast.success("CF-control nastavení uloženo.");
       setCfKey("");
@@ -255,6 +259,20 @@ function SettingsPage() {
                     Uložený klíč: <span className="font-mono">{cfData.api_key_masked}</span>
                   </p>
                 )}
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfQueue">ID číselné řady faktur (invoiceNumberQueue)</Label>
+                <Input
+                  id="cfQueue"
+                  type="number"
+                  min={1}
+                  value={cfQueue}
+                  onChange={(e) => setCfQueue(Number(e.target.value) || 1)}
+                  placeholder="1"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Číslo řady, pod kterou se v CF-control budou zakládat nově vystavené faktury.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cfTestPath">Testovací akce (volitelné)</Label>

@@ -327,6 +327,7 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
         amount: Number(ci.total_amount),
         currency: inv.currency,
         description: `Mobilní vyúčtování – faktura ${inv.xml_number}`,
+        note: `Číslo původní faktury: ${inv.xml_number}`,
         variableSymbol: inv.xml_number,
       });
       if (!data.skipEmail) {

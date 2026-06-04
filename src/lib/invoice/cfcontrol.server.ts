@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 export interface CfControlConfig {
   base_url: string;
   api_key: string;
+  invoice_number_queue: number;
 }
 
 export async function loadCfControlConfig(): Promise<CfControlConfig> {
@@ -16,17 +17,19 @@ export async function loadCfControlConfig(): Promise<CfControlConfig> {
     .eq("key", "cf_control")
     .maybeSingle();
   const v = (data?.value ?? {}) as Partial<CfControlConfig>;
+  const q = Number(v.invoice_number_queue ?? process.env.CF_CONTROL_INVOICE_QUEUE ?? 1);
   return {
     base_url: (v.base_url || process.env.CF_CONTROL_API_BASE_URL || "").trim(),
     api_key: (process.env.CF_CONTROL_API_KEY || v.api_key || "").trim(),
+    invoice_number_queue: Number.isFinite(q) && q > 0 ? q : 1,
   };
 }
 
-async function resolved(): Promise<{ base: string; key: string }> {
+async function resolved(): Promise<{ base: string; key: string; queue: number }> {
   const cfg = await loadCfControlConfig();
   if (!cfg.base_url) throw new Error("CF-control URL není nastavena (Nastavení).");
   if (!cfg.api_key) throw new Error("CF-control API klíč není nastaven (Nastavení).");
-  return { base: cfg.base_url.replace(/\/+$/, ""), key: cfg.api_key };
+  return { base: cfg.base_url.replace(/\/+$/, ""), key: cfg.api_key, queue: cfg.invoice_number_queue };
 }
 
 function authHeaders(key: string): HeadersInit {
@@ -42,6 +45,7 @@ export interface CreateReceivableInput {
   amount: number;
   currency: string;
   description: string;
+  note?: string;
   variableSymbol?: string;
   dueDate?: string;
 }
@@ -52,7 +56,7 @@ export interface CreateReceivableInput {
  * and the `Cf-API-Authorization` header.
  */
 export async function createReceivable(input: CreateReceivableInput): Promise<{ id: string; raw: unknown }> {
-  const { base, key } = await resolved();
+  const { base, key, queue } = await resolved();
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -60,7 +64,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
 
   const payload: Record<string, unknown> = {
     customerId: input.clientId,
-    invoiceNumberQueue: Number(process.env.CF_CONTROL_INVOICE_QUEUE || 1),
+    invoiceNumberQueue: queue,
     invoiceNumberCount: 6,
     invoiceNumber: 0,
     date: `${dd}.${mm}.${yyyy}`,
@@ -68,6 +72,8 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     maturity: 14,
     priceType: 1,
     variableSymbol: input.variableSymbol,
+    description: input.note,
+    note: input.note,
     items: [
       {
         name: input.description,

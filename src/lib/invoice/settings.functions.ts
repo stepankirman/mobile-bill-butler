@@ -92,7 +92,6 @@ export const getCfControlSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
   .handler(async () => {
     const cfg = await loadCfControlConfig();
-    // Mask the API key for the UI.
     const masked = cfg.api_key
       ? `${cfg.api_key.slice(0, 4)}…${cfg.api_key.slice(-4)} (${cfg.api_key.length} znaků)`
       : "";
@@ -100,13 +99,14 @@ export const getCfControlSettings = createServerFn({ method: "GET" })
       base_url: cfg.base_url,
       has_api_key: !!cfg.api_key,
       api_key_masked: masked,
+      invoice_number_queue: cfg.invoice_number_queue,
     };
   });
 
 const CfSaveSchema = z.object({
   base_url: z.string().trim().min(1).max(500),
-  // Empty string = keep stored key.
   api_key: z.string().max(500).optional().default(""),
+  invoice_number_queue: z.number().int().min(1).max(999999).optional(),
 });
 
 export const saveCfControlSettings = createServerFn({ method: "POST" })
@@ -117,6 +117,7 @@ export const saveCfControlSettings = createServerFn({ method: "POST" })
     const next = {
       base_url: data.base_url.trim(),
       api_key: data.api_key && data.api_key.trim() ? data.api_key.trim() : current.api_key,
+      invoice_number_queue: data.invoice_number_queue ?? current.invoice_number_queue,
     };
     const { error } = await supabaseAdmin
       .from("app_settings")
