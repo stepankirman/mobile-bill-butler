@@ -234,10 +234,10 @@ function SettingsPage() {
                   id="cfUrl"
                   value={cfUrl}
                   onChange={(e) => setCfUrl(e.target.value)}
-                  placeholder="https://demo.cf-control.cz/api/web/v2"
+                  placeholder="https://cf.teamcity.cz/api/web/v1/"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Např. <code>https://&lt;instance&gt;.cf-control.cz/api/web/v2</code>. Bez koncového lomítka.
+                  Pro v1 API zadejte endpoint jako <code>https://cf.teamcity.cz/api/web/v1/</code>.
                 </p>
               </div>
               <div className="space-y-2">
@@ -257,7 +257,7 @@ function SettingsPage() {
                 )}
               </div>
               <div className="space-y-2">
-                <Label htmlFor="cfTestPath">Testovací cesta (volitelné)</Label>
+                <Label htmlFor="cfTestPath">Testovací akce (volitelné)</Label>
                 <Input
                   id="cfTestPath"
                   value={cfTestPath}
@@ -265,7 +265,7 @@ function SettingsPage() {
                   placeholder="/customer/list"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pokud necháte prázdné, zavolá se přesně jako v PHP <code>GET /customer/list</code> s parametrem <code>limit=10</code>.
+                  Pokud necháte prázdné, zavolá se v1 ukázka <code>action=/customer/list</code> s povinným seznamem <code>fields</code>.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">
@@ -358,7 +358,7 @@ function SettingsPage() {
                   <ul className="mt-1 space-y-1 text-xs">
                     {testCfMut.data.details.map((d, i) => (
                       <li key={i}>
-                        – Pole: <code>{d.field ?? "N/A"}</code> | Chyba: {d.message ?? "N/A"}
+                        – Kód: <code>{d.key ?? "N/A"}</code> | Pole: <code>{d.field ?? "N/A"}</code> | Chyba: {d.message ?? "N/A"}
                       </li>
                     ))}
                   </ul>
