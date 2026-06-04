@@ -56,6 +56,7 @@ function InvoiceListPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
+  const [monthFilter, setMonthFilter] = useState<Set<string>>(new Set());
   const [searchResults, setSearchResults] = useState<
     | null
     | Array<{
@@ -68,7 +69,14 @@ function InvoiceListPage() {
       }>
   >(null);
 
-  const invoices = data?.invoices ?? [];
+  const allInvoices = data?.invoices ?? [];
+  const invoices = useMemo(
+    () =>
+      monthFilter.size === 0
+        ? allInvoices
+        : allInvoices.filter((i) => monthFilter.has(monthKey(i.issued_at))),
+    [allInvoices, monthFilter],
+  );
   const allIds = useMemo(() => invoices.map((i) => i.id), [invoices]);
 
   const monthSums = useMemo(() => {
@@ -82,6 +90,12 @@ function InvoiceListPage() {
     }
     return Array.from(m.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [invoices]);
+
+  const allMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of allInvoices) set.add(monthKey(i.issued_at));
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [allInvoices]);
 
   const months = monthSums.map(([m]) => m);
   const grandTotal = invoices.reduce((s, i) => s + Number(i.total_with_vat), 0);
