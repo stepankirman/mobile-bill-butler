@@ -136,6 +136,7 @@ export const testCfControlSettings = createServerFn({ method: "POST" })
       .object({
         base_url: z.string().trim().max(500).optional(),
         api_key: z.string().max(500).optional(),
+        test_path: z.string().trim().max(500).optional(),
       })
       .optional(),
   )
@@ -146,5 +147,5 @@ export const testCfControlSettings = createServerFn({ method: "POST" })
           api_key: data.api_key && data.api_key.trim() ? data.api_key.trim() : undefined,
         }
       : undefined;
-    return testCfControl(override);
+    return testCfControl(override, data?.test_path || undefined);
   });
