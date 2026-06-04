@@ -1,16 +1,25 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ParsedInvoice, ParsedInvoiceLine } from "./parser.server";
 
-function decodeEntities(s: string): string {
-  if (!s) return s;
+function decodeOnce(s: string): string {
   return s
+    .replace(/&amp;/g, "&")
     .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
     .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
-    .replace(/&amp;/g, "&")
     .replace(/&lt;/g, "<")
     .replace(/&gt;/g, ">")
     .replace(/&quot;/g, '"')
     .replace(/&apos;/g, "'");
+}
+function decodeEntities(s: string): string {
+  if (!s) return s;
+  let prev = s;
+  for (let i = 0; i < 3; i++) {
+    const next = decodeOnce(prev);
+    if (next === prev) break;
+    prev = next;
+  }
+  return prev;
 }
 
 // pdf-lib's StandardFonts (WinAnsi) lack many Czech glyphs; strip diacritics.
