@@ -249,8 +249,95 @@ function InvoiceListPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>Faktury</CardTitle>
+        <CardHeader className="flex flex-col gap-3">
+          <div className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Faktury</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {months.length > 1 && (
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      selectMonth(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
+                >
+                  <option value="">Označit měsíc…</option>
+                  {months.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={selected.size === 0 || delMut.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Smazat ({selected.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Smazat vybrané faktury?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Bude smazáno {selected.size} faktur včetně všech položek, klientských
+                      rozpisů a PDF. Akci nelze vrátit.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Zrušit</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => delMut.mutate(Array.from(selected))}>
+                      Smazat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+          {allMonths.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">Filtr měsíců:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={monthFilter.size === 0 ? "default" : "outline"}
+                onClick={() => setMonthFilter(new Set())}
+              >
+                Vše
+              </Button>
+              {allMonths.map((m) => {
+                const active = monthFilter.has(m);
+                return (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={active ? "default" : "outline"}
+                    onClick={() =>
+                      setMonthFilter((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(m)) n.delete(m);
+                        else n.add(m);
+                        return n;
+                      })
+                    }
+                  >
+                    {m}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
+        </CardHeader>
+        <CardContent>
+          {/* placeholder marker for old header end */}
           <div className="flex flex-wrap items-center gap-2">
             {months.length > 1 && (
               <select
