@@ -216,6 +216,110 @@ function SettingsPage() {
           </CardContent>
         </Card>
       )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>CF-control API</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {cfLoading ? (
+            <p className="text-sm text-muted-foreground">Načítám…</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="cfUrl">Základní URL API</Label>
+                <Input
+                  id="cfUrl"
+                  value={cfUrl}
+                  onChange={(e) => setCfUrl(e.target.value)}
+                  placeholder="https://app.cf-control.cz/api"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Bez koncového lomítka. Volá se např. <code>{`{URL}/receivables`}</code>.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfKey">API klíč</Label>
+                <Input
+                  id="cfKey"
+                  type="password"
+                  value={cfKey}
+                  onChange={(e) => setCfKey(e.target.value)}
+                  placeholder={cfData?.has_api_key ? "•••• (uložen) – nechte prázdné pro zachování" : "Vložte API klíč"}
+                  autoComplete="new-password"
+                />
+                {cfData?.has_api_key && (
+                  <p className="text-xs text-muted-foreground">
+                    Uložený klíč: <span className="font-mono">{cfData.api_key_masked}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={() => saveCfMut.mutate()} disabled={saveCfMut.isPending || !cfUrl.trim()}>
+                  {saveCfMut.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Uložit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => testCfMut.mutate()}
+                  disabled={testCfMut.isPending || (!cfUrl.trim() && !cfData?.base_url)}
+                >
+                  {testCfMut.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <TestTube className="mr-2 h-4 w-4" />
+                  )}
+                  Otestovat připojení
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {testCfMut.data && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Výsledek testu CF-control
+              {testCfMut.data.ok ? <Badge>OK</Badge> : <Badge variant="destructive">Chyba</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {testCfMut.data.ok ? (
+              <>
+                <p>
+                  Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
+                  {testCfMut.data.statusText}.
+                </p>
+                {testCfMut.data.bodyPreview && (
+                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
+                    {testCfMut.data.bodyPreview}
+                  </pre>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-destructive">{testCfMut.data.error}</p>
+                {testCfMut.data.status !== undefined && (
+                  <p>
+                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText}
+                  </p>
+                )}
+                {testCfMut.data.bodyPreview && (
+                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
+                    {testCfMut.data.bodyPreview}
+                  </pre>
+                )}
+              </>
+            )}
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }
