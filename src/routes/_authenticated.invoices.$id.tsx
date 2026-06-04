@@ -231,7 +231,8 @@ function InvoiceDetailPage() {
                 <TableHead>Telefon</TableHead>
                 <TableHead className="text-right">Paušál</TableHead>
                 <TableHead className="text-right">Ostatní provoz</TableHead>
-                <TableHead className="text-right">Celkem</TableHead>
+                <TableHead className="text-right">Celkem bez DPH</TableHead>
+                <TableHead className="text-right">Celkem s DPH</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -239,6 +240,8 @@ function InvoiceDetailPage() {
                 const isOpen = expanded.has(l.id);
                 const raw = (l.raw_json ?? {}) as { items?: PolItem[] };
                 const items: PolItem[] = Array.isArray(raw.items) ? raw.items : [];
+                const totalBase = Number(l.total);
+                const totalVat = totalBase * VAT_RATE;
                 return (
                   <Fragment key={l.id}>
                     <TableRow
@@ -260,13 +263,16 @@ function InvoiceDetailPage() {
                         {Number(l.other_traffic).toFixed(2)}
                       </TableCell>
                       <TableCell className="text-right">
-                        {Number(l.total).toFixed(2)}
+                        {totalBase.toFixed(2)}
+                      </TableCell>
+                      <TableCell className="text-right font-medium">
+                        {totalVat.toFixed(2)}
                       </TableCell>
                     </TableRow>
                     {isOpen && (
                       <TableRow className="bg-muted/40 hover:bg-muted/40">
                         <TableCell></TableCell>
-                        <TableCell colSpan={4}>
+                        <TableCell colSpan={5}>
                           {items.length === 0 ? (
                             <p className="text-sm text-muted-foreground py-2">
                               Žádné detailní položky.
@@ -279,35 +285,43 @@ function InvoiceDetailPage() {
                                   <TableHead>Typ</TableHead>
                                   <TableHead className="text-right">Počet</TableHead>
                                   <TableHead>Jedn.</TableHead>
-                                  <TableHead className="text-right">Cena</TableHead>
-                                  <TableHead className="text-right">Celkem</TableHead>
+                                  <TableHead className="text-right">Cena bez DPH</TableHead>
+                                  <TableHead className="text-right">Celkem bez DPH</TableHead>
+                                  <TableHead className="text-right">Celkem s DPH</TableHead>
                                 </TableRow>
                               </TableHeader>
                               <TableBody>
-                                {items.map((it, i) => (
-                                  <TableRow key={i}>
-                                    <TableCell className="text-sm">
-                                      {it.description || "—"}
-                                    </TableCell>
-                                    <TableCell className="text-xs text-muted-foreground">
-                                      {it.feature || "—"}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {it.quantity != null
-                                        ? Number(it.quantity).toLocaleString("cs-CZ", {
-                                            maximumFractionDigits: 3,
-                                          })
-                                        : "—"}
-                                    </TableCell>
-                                    <TableCell>{it.unit || "—"}</TableCell>
-                                    <TableCell className="text-right">
-                                      {it.unitPrice != null ? Number(it.unitPrice).toFixed(2) : "—"}
-                                    </TableCell>
-                                    <TableCell className="text-right">
-                                      {it.total != null ? Number(it.total).toFixed(2) : "—"}
-                                    </TableCell>
-                                  </TableRow>
-                                ))}
+                                {items.map((it, i) => {
+                                  const total = it.total != null ? Number(it.total) : null;
+                                  const withVat = total != null ? total * VAT_RATE : null;
+                                  return (
+                                    <TableRow key={i}>
+                                      <TableCell className="text-sm">
+                                        {decodeEntities(it.description || "") || "—"}
+                                      </TableCell>
+                                      <TableCell className="text-xs text-muted-foreground">
+                                        {decodeEntities(it.feature || "") || "—"}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {it.quantity != null
+                                          ? Number(it.quantity).toLocaleString("cs-CZ", {
+                                              maximumFractionDigits: 3,
+                                            })
+                                          : "—"}
+                                      </TableCell>
+                                      <TableCell>{decodeEntities(it.unit || "") || "—"}</TableCell>
+                                      <TableCell className="text-right">
+                                        {it.unitPrice != null ? Number(it.unitPrice).toFixed(2) : "—"}
+                                      </TableCell>
+                                      <TableCell className="text-right">
+                                        {total != null ? total.toFixed(2) : "—"}
+                                      </TableCell>
+                                      <TableCell className="text-right font-medium">
+                                        {withVat != null && total !== 0 ? withVat.toFixed(2) : "—"}
+                                      </TableCell>
+                                    </TableRow>
+                                  );
+                                })}
                               </TableBody>
                             </Table>
                           )}
