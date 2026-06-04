@@ -294,7 +294,21 @@ function InvoiceDetailPage() {
                     </Button>
                     <Button
                       size="sm"
-                      onClick={() => importMut.mutate(c.id)}
+                      variant="secondary"
+                      onClick={() => importMut.mutate({ customerInvoiceId: c.id, skipEmail: true })}
+                      disabled={
+                        !c.cf_control_client_id ||
+                        c.cf_status === "sent" ||
+                        importMut.isPending
+                      }
+                      title="Odeslat do CF-control bez e-mailu klientovi"
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      Import bez e-mailu
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => importMut.mutate({ customerInvoiceId: c.id, skipEmail: false })}
                       disabled={
                         !c.cf_control_client_id ||
                         c.cf_status === "sent" ||
