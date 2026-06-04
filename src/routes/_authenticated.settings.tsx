@@ -256,6 +256,18 @@ function SettingsPage() {
                   </p>
                 )}
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfTestPath">Testovací cesta (volitelné)</Label>
+                <Input
+                  id="cfTestPath"
+                  value={cfTestPath}
+                  onChange={(e) => setCfTestPath(e.target.value)}
+                  placeholder="/api/receivables?limit=1"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Pokud necháte prázdné, vyzkouší se několik běžných GET endpointů.
+                </p>
+              </div>
               <div className="flex gap-2 pt-2">
                 <Button onClick={() => saveCfMut.mutate()} disabled={saveCfMut.isPending || !cfUrl.trim()}>
                   {saveCfMut.isPending ? (
