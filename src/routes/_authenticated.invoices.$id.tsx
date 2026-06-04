@@ -35,6 +35,24 @@ interface PolItem {
   total?: number;
 }
 
+const VAT_RATE = 1.21;
+
+function decodeEntities(s: string): string {
+  if (!s) return s;
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _; }
+    })
+    .replace(/&#(\d+);/g, (_, d) => {
+      try { return String.fromCodePoint(parseInt(d, 10)); } catch { return _; }
+    })
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 function InvoiceDetailPage() {
   const { id } = Route.useParams();
   const qc = useQueryClient();
@@ -57,19 +75,23 @@ function InvoiceDetailPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
   });
 
-  // Pre-open window synchronously to avoid popup blocker on async URLs.
-  function openPdf(path: string | null) {
-    if (!path) return;
-    const win = window.open("about:blank", "_blank");
-    signFn({ data: { path } })
-      .then(({ url }) => {
-        if (win) win.location.href = url;
-        else window.location.href = url;
-      })
-      .catch((e) => {
-        if (win) win.close();
-        toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
-      });
+  async function openPdf(path: string | null) {
+    if (!path) {
+      toast.error("PDF pro tuto položku neexistuje.");
+      return;
+    }
+    try {
+      const { url } = await signFn({ data: { path } });
+      const a = document.createElement("a");
+      a.href = url;
+      a.target = "_blank";
+      a.rel = "noopener noreferrer";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
+    }
   }
 
   function toggleRow(key: string) {
