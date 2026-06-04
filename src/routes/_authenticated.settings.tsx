@@ -321,7 +321,7 @@ function SettingsPage() {
                 <p className="text-destructive">{testCfMut.data.error}</p>
                 {testCfMut.data.status !== undefined && (
                   <p>
-                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText}
+                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText} {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
                   </p>
                 )}
                 {testCfMut.data.bodyPreview && (
