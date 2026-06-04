@@ -106,9 +106,14 @@ function InvoiceDetailPage() {
   });
 
   const importMut = useMutation({
-    mutationFn: (customerInvoiceId: string) => importFn({ data: { customerInvoiceId } }),
-    onSuccess: () => {
-      toast.success("Importováno do CF-control a e-mail odeslán.");
+    mutationFn: (vars: { customerInvoiceId: string; skipEmail: boolean }) =>
+      importFn({ data: vars }),
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.skipEmail
+          ? "Importováno do CF-control (bez e-mailu)."
+          : "Importováno do CF-control a e-mail odeslán.",
+      );
       qc.invalidateQueries({ queryKey: ["invoice", id] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
@@ -289,7 +294,21 @@ function InvoiceDetailPage() {
                     </Button>
                     <Button
                       size="sm"
-                      onClick={() => importMut.mutate(c.id)}
+                      variant="secondary"
+                      onClick={() => importMut.mutate({ customerInvoiceId: c.id, skipEmail: true })}
+                      disabled={
+                        !c.cf_control_client_id ||
+                        c.cf_status === "sent" ||
+                        importMut.isPending
+                      }
+                      title="Odeslat do CF-control bez e-mailu klientovi"
+                    >
+                      <Send className="mr-2 h-4 w-4" />
+                      Import bez e-mailu
+                    </Button>
+                    <Button
+                      size="sm"
+                      onClick={() => importMut.mutate({ customerInvoiceId: c.id, skipEmail: false })}
                       disabled={
                         !c.cf_control_client_id ||
                         c.cf_status === "sent" ||
