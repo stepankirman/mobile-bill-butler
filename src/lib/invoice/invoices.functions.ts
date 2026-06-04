@@ -6,6 +6,7 @@ import { parseInvoiceXml } from "./parser.server";
 import { fetchSheetMapping } from "./sheet.server";
 import { renderInvoicePdf } from "./pdf.server";
 import { createReceivable, notifyClient } from "./cfcontrol.server";
+import { normalizePhone } from "../phone";
 
 const PDF_BUCKET = "invoice-pdfs";
 
@@ -318,12 +319,38 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
       .eq("id", data.customerInvoiceId)
       .maybeSingle();
     if (error || !ci) throw new Error(error?.message ?? "Záznam nenalezen");
-    if (!ci.cf_control_client_id) throw new Error("Chybí ID klienta v CF-control");
 
     const inv = (ci as unknown as { invoices: { xml_number: string; currency: string } }).invoices;
     try {
+      const mapping = await fetchSheetMapping();
+      const phoneNumbers = Array.isArray(ci.phone_numbers)
+        ? ci.phone_numbers.map((p) => normalizePhone(String(p))).filter(Boolean)
+        : [];
+      const freshClientId = phoneNumbers.map((p) => mapping.byPhone.get(p)?.trim()).find(Boolean);
+      const hasCurrentSheetRow = phoneNumbers.some(
+        (p) => mapping.byPhone.has(p) || mapping.byPhoneName.has(p),
+      );
+      const storedClientId = String(ci.cf_control_client_id ?? "").trim();
+      const clientId = freshClientId ?? (hasCurrentSheetRow ? "" : storedClientId);
+      if (!clientId) {
+        if (storedClientId && hasCurrentSheetRow) {
+          await supabaseAdmin
+            .from("customer_invoices")
+            .update({ cf_control_client_id: null })
+            .eq("id", ci.id);
+        }
+        throw new Error(
+          `Chybí ID klienta v Google Sheets pro telefon ${phoneNumbers.join(", ") || "—"}`,
+        );
+      }
+      if (clientId !== storedClientId) {
+        await supabaseAdmin
+          .from("customer_invoices")
+          .update({ cf_control_client_id: clientId })
+          .eq("id", ci.id);
+      }
       const { id: receivableId } = await createReceivable({
-        clientId: ci.cf_control_client_id,
+        clientId,
         amount: Number(ci.total_amount),
         currency: inv.currency,
         description: `Mobilní vyúčtování – faktura ${inv.xml_number}`,
@@ -332,7 +359,7 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
       });
       if (!data.skipEmail) {
         await notifyClient({
-          clientId: ci.cf_control_client_id,
+          clientId,
           receivableId,
           subject: `Vyúčtování mobilních služeb – ${inv.xml_number}`,
           body: `Dobrý den,\n\nvyúčtování mobilních služeb za období fakturuje částku ${Number(

@@ -116,7 +116,10 @@ function InvoiceDetailPage() {
       );
       qc.invalidateQueries({ queryKey: ["invoice", id] });
     },
-    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
+    onError: (e: unknown) => {
+      toast.error(e instanceof Error ? e.message : "Chyba importu");
+      qc.invalidateQueries({ queryKey: ["invoice", id] });
+    },
   });
 
   async function getPdfBlobUrl(path: string): Promise<string> {
