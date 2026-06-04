@@ -142,12 +142,12 @@ function buildCfControlV1Url(baseUrl: string, action: string, settings: Record<s
 }
 
 function parseCfControlV1Input(input?: string): { action: string; settings: Record<string, unknown> } {
-  const raw = input?.trim() || "/customer/list";
-  const normalized = raw;
-  const [actionPart, queryStr] = normalized.split("?", 2);
+  const raw = (input?.trim() || "getTarifList").replace(/^\/+/, "");
+  const [actionPart, queryStr] = raw.split("?", 2);
   const settings: Record<string, unknown> = {};
   if (!input?.trim()) {
-    settings.fields = ["id", "contractNumber", "nameFull", "phone", "email", "address", "tarif", "transmitter", "paymentStatus"];
+    // Default sanity-check call from the v1 docs.
+    settings.tarifDataType = "minimal";
   }
 
   if (queryStr) {
@@ -158,7 +158,7 @@ function parseCfControlV1Input(input?: string): { action: string; settings: Reco
     });
   }
 
-  return { action: actionPart || "customer/list", settings };
+  return { action: actionPart || "getTarifList", settings };
 }
 
 function parseCfControlJson(text: string): unknown | null {
