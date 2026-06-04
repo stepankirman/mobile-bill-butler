@@ -261,6 +261,20 @@ function SettingsPage() {
                 )}
               </div>
               <div className="space-y-2">
+                <Label htmlFor="cfQueue">ID číselné řady faktur (invoiceNumberQueue)</Label>
+                <Input
+                  id="cfQueue"
+                  type="number"
+                  min={1}
+                  value={cfQueue}
+                  onChange={(e) => setCfQueue(Number(e.target.value) || 1)}
+                  placeholder="1"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Číslo řady, pod kterou se v CF-control budou zakládat nově vystavené faktury.
+                </p>
+              </div>
+              <div className="space-y-2">
                 <Label htmlFor="cfTestPath">Testovací akce (volitelné)</Label>
                 <Input
                   id="cfTestPath"
