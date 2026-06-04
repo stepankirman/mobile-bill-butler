@@ -56,6 +56,7 @@ function InvoiceListPage() {
 
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [q, setQ] = useState("");
+  const [monthFilter, setMonthFilter] = useState<Set<string>>(new Set());
   const [searchResults, setSearchResults] = useState<
     | null
     | Array<{
@@ -68,7 +69,14 @@ function InvoiceListPage() {
       }>
   >(null);
 
-  const invoices = data?.invoices ?? [];
+  const allInvoices = data?.invoices ?? [];
+  const invoices = useMemo(
+    () =>
+      monthFilter.size === 0
+        ? allInvoices
+        : allInvoices.filter((i) => monthFilter.has(monthKey(i.issued_at))),
+    [allInvoices, monthFilter],
+  );
   const allIds = useMemo(() => invoices.map((i) => i.id), [invoices]);
 
   const monthSums = useMemo(() => {
@@ -82,6 +90,12 @@ function InvoiceListPage() {
     }
     return Array.from(m.entries()).sort((a, b) => b[0].localeCompare(a[0]));
   }, [invoices]);
+
+  const allMonths = useMemo(() => {
+    const set = new Set<string>();
+    for (const i of allInvoices) set.add(monthKey(i.issued_at));
+    return Array.from(set).sort((a, b) => b.localeCompare(a));
+  }, [allInvoices]);
 
   const months = monthSums.map(([m]) => m);
   const grandTotal = invoices.reduce((s, i) => s + Number(i.total_with_vat), 0);
@@ -235,64 +249,104 @@ function InvoiceListPage() {
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-4">
-          <CardTitle>Faktury</CardTitle>
-          <div className="flex flex-wrap items-center gap-2">
-            {months.length > 1 && (
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                defaultValue=""
-                onChange={(e) => {
-                  if (e.target.value) {
-                    selectMonth(e.target.value);
-                    e.target.value = "";
-                  }
-                }}
-              >
-                <option value="">Označit měsíc…</option>
-                {months.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={selected.size === 0 || delMut.isPending}
+        <CardHeader className="flex flex-col gap-3">
+          <div className="flex flex-row items-center justify-between gap-4">
+            <CardTitle>Faktury</CardTitle>
+            <div className="flex flex-wrap items-center gap-2">
+              {months.length > 1 && (
+                <select
+                  className="h-9 rounded-md border border-input bg-background px-2 text-sm"
+                  defaultValue=""
+                  onChange={(e) => {
+                    if (e.target.value) {
+                      selectMonth(e.target.value);
+                      e.target.value = "";
+                    }
+                  }}
                 >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Smazat ({selected.size})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Smazat vybrané faktury?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Bude smazáno {selected.size} faktur včetně všech položek, klientských
-                    rozpisů a PDF. Akci nelze vrátit.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Zrušit</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => delMut.mutate(Array.from(selected))}>
-                    Smazat
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
+                  <option value="">Označit měsíc…</option>
+                  {months.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <AlertDialog>
+                <AlertDialogTrigger asChild>
+                  <Button
+                    variant="destructive"
+                    size="sm"
+                    disabled={selected.size === 0 || delMut.isPending}
+                  >
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Smazat ({selected.size})
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Smazat vybrané faktury?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      Bude smazáno {selected.size} faktur včetně všech položek, klientských
+                      rozpisů a PDF. Akci nelze vrátit.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Zrušit</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => delMut.mutate(Array.from(selected))}>
+                      Smazat
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
           </div>
+          {allMonths.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t pt-3">
+              <span className="text-xs font-medium text-muted-foreground">Filtr měsíců:</span>
+              <Button
+                type="button"
+                size="sm"
+                variant={monthFilter.size === 0 ? "default" : "outline"}
+                onClick={() => setMonthFilter(new Set())}
+              >
+                Vše
+              </Button>
+              {allMonths.map((m) => {
+                const active = monthFilter.has(m);
+                return (
+                  <Button
+                    key={m}
+                    type="button"
+                    size="sm"
+                    variant={active ? "default" : "outline"}
+                    onClick={() =>
+                      setMonthFilter((prev) => {
+                        const n = new Set(prev);
+                        if (n.has(m)) n.delete(m);
+                        else n.add(m);
+                        return n;
+                      })
+                    }
+                  >
+                    {m}
+                  </Button>
+                );
+              })}
+            </div>
+          )}
         </CardHeader>
         <CardContent>
           {isLoading && <p className="text-sm text-muted-foreground">Načítám…</p>}
           {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-          {data && data.invoices.length === 0 && (
-            <p className="text-sm text-muted-foreground">Zatím žádná faktura.</p>
+          {data && invoices.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {allInvoices.length === 0
+                ? "Zatím žádná faktura."
+                : "Žádná faktura nevyhovuje filtru měsíců."}
+            </p>
           )}
-          {data && data.invoices.length > 0 && (
+          {data && invoices.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -312,7 +366,7 @@ function InvoiceListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.invoices.map((inv) => (
+                {invoices.map((inv) => (
                   <TableRow key={inv.id} data-state={selected.has(inv.id) ? "selected" : undefined}>
                     <TableCell>
                       <Checkbox

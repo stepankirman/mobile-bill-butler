@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getSheetSettings, saveSheetSettings, testSheetSettings } from "@/lib/invoice/settings.functions";
+import { getSheetSettings, saveSheetSettings, testSheetSettings, getCfControlSettings, saveCfControlSettings, testCfControlSettings } from "@/lib/invoice/settings.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,8 +20,42 @@ function SettingsPage() {
   const getFn = useServerFn(getSheetSettings);
   const saveFn = useServerFn(saveSheetSettings);
   const testFn = useServerFn(testSheetSettings);
+  const getCfFn = useServerFn(getCfControlSettings);
+  const saveCfFn = useServerFn(saveCfControlSettings);
+  const testCfFn = useServerFn(testCfControlSettings);
 
   const { data, isLoading } = useQuery({ queryKey: ["sheet-settings"], queryFn: () => getFn() });
+  const { data: cfData, isLoading: cfLoading, refetch: refetchCf } = useQuery({
+    queryKey: ["cf-control-settings"],
+    queryFn: () => getCfFn(),
+  });
+
+  const [cfUrl, setCfUrl] = useState("");
+  const [cfKey, setCfKey] = useState("");
+
+  useEffect(() => {
+    if (cfData) setCfUrl(cfData.base_url ?? "");
+  }, [cfData]);
+
+  const saveCfMut = useMutation({
+    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey } }),
+    onSuccess: () => {
+      toast.success("CF-control nastavení uloženo.");
+      setCfKey("");
+      refetchCf();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba"),
+  });
+
+  const testCfMut = useMutation({
+    mutationFn: () =>
+      testCfFn({
+        data: {
+          base_url: cfUrl || undefined,
+          api_key: cfKey || undefined,
+        },
+      }),
+  });
 
   const [url, setUrl] = useState("");
   const [sheetName, setSheetName] = useState("");
@@ -178,6 +212,110 @@ function SettingsPage() {
               </>
             ) : (
               <p className="text-destructive">{testMut.data.error}</p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      <Card>
+        <CardHeader>
+          <CardTitle>CF-control API</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          {cfLoading ? (
+            <p className="text-sm text-muted-foreground">Načítám…</p>
+          ) : (
+            <>
+              <div className="space-y-2">
+                <Label htmlFor="cfUrl">Základní URL API</Label>
+                <Input
+                  id="cfUrl"
+                  value={cfUrl}
+                  onChange={(e) => setCfUrl(e.target.value)}
+                  placeholder="https://app.cf-control.cz/api"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Bez koncového lomítka. Volá se např. <code>{`{URL}/receivables`}</code>.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfKey">API klíč</Label>
+                <Input
+                  id="cfKey"
+                  type="password"
+                  value={cfKey}
+                  onChange={(e) => setCfKey(e.target.value)}
+                  placeholder={cfData?.has_api_key ? "•••• (uložen) – nechte prázdné pro zachování" : "Vložte API klíč"}
+                  autoComplete="new-password"
+                />
+                {cfData?.has_api_key && (
+                  <p className="text-xs text-muted-foreground">
+                    Uložený klíč: <span className="font-mono">{cfData.api_key_masked}</span>
+                  </p>
+                )}
+              </div>
+              <div className="flex gap-2 pt-2">
+                <Button onClick={() => saveCfMut.mutate()} disabled={saveCfMut.isPending || !cfUrl.trim()}>
+                  {saveCfMut.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <Save className="mr-2 h-4 w-4" />
+                  )}
+                  Uložit
+                </Button>
+                <Button
+                  variant="outline"
+                  onClick={() => testCfMut.mutate()}
+                  disabled={testCfMut.isPending || (!cfUrl.trim() && !cfData?.base_url)}
+                >
+                  {testCfMut.isPending ? (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  ) : (
+                    <TestTube className="mr-2 h-4 w-4" />
+                  )}
+                  Otestovat připojení
+                </Button>
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
+
+      {testCfMut.data && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              Výsledek testu CF-control
+              {testCfMut.data.ok ? <Badge>OK</Badge> : <Badge variant="destructive">Chyba</Badge>}
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {testCfMut.data.ok ? (
+              <>
+                <p>
+                  Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
+                  {testCfMut.data.statusText}.
+                </p>
+                {testCfMut.data.bodyPreview && (
+                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
+                    {testCfMut.data.bodyPreview}
+                  </pre>
+                )}
+              </>
+            ) : (
+              <>
+                <p className="text-destructive">{testCfMut.data.error}</p>
+                {testCfMut.data.status !== undefined && (
+                  <p>
+                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText}
+                  </p>
+                )}
+                {testCfMut.data.bodyPreview && (
+                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
+                    {testCfMut.data.bodyPreview}
+                  </pre>
+                )}
+              </>
             )}
           </CardContent>
         </Card>
