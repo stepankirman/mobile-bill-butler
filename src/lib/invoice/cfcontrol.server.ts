@@ -63,7 +63,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
   const yyyy = today.getFullYear();
 
   const customerIdNum = Number(String(input.clientId).trim());
-  if (!Number.isFinite(customerIdNum) || customerIdNum <= 0) {
+  if (!Number.isInteger(customerIdNum) || customerIdNum <= 0) {
     throw new Error(`CF-control insertInvoice: customerId musí být číslo (dostal jsem "${input.clientId}")`);
   }
   const payload: Record<string, unknown> = {
