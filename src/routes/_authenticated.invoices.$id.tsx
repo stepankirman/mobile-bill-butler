@@ -392,24 +392,37 @@ function InvoiceDetailPage() {
                                   const total = it.total != null ? Number(it.total) : null;
                                   const vatRate = itemVatRate(it, rawItems, i, lineVatRate);
                                   const withVat = total != null ? totalWithVat(total, vatRate) : null;
+                                  const rawUnit = decodeEntities(it.unit || "");
+                                  const desc = decodeEntities(it.description || "");
+                                  const isInternetMb =
+                                    rawUnit.trim().toUpperCase() === "MB" &&
+                                    (/internet/i.test(desc) || /internet/i.test(it.feature || ""));
+                                  let dispQty = it.quantity != null ? Number(it.quantity) : null;
+                                  let dispUnit = rawUnit;
+                                  let dispUnitPrice = it.unitPrice != null ? Number(it.unitPrice) : null;
+                                  if (isInternetMb) {
+                                    if (dispQty != null) dispQty = dispQty / 1024;
+                                    if (dispUnitPrice != null) dispUnitPrice = dispUnitPrice * 1024;
+                                    dispUnit = "GB";
+                                  }
                                   return (
                                     <TableRow key={i}>
                                       <TableCell className="text-sm">
-                                        {decodeEntities(it.description || "") || "—"}
+                                        {desc || "—"}
                                       </TableCell>
                                       <TableCell className="text-xs text-muted-foreground">
                                         {decodeEntities(it.feature || "") || "—"}
                                       </TableCell>
                                       <TableCell className="text-right">
-                                        {it.quantity != null
-                                          ? Number(it.quantity).toLocaleString("cs-CZ", {
+                                        {dispQty != null
+                                          ? dispQty.toLocaleString("cs-CZ", {
                                               maximumFractionDigits: 3,
                                             })
                                           : "—"}
                                       </TableCell>
-                                      <TableCell>{decodeEntities(it.unit || "") || "—"}</TableCell>
+                                      <TableCell>{dispUnit || "—"}</TableCell>
                                       <TableCell className="text-right">
-                                        {it.unitPrice != null ? Number(it.unitPrice).toFixed(2) : "—"}
+                                        {dispUnitPrice != null ? dispUnitPrice.toFixed(2) : "—"}
                                       </TableCell>
                                       <TableCell className="text-right">{vatRate.toFixed(0)} %</TableCell>
                                       <TableCell className="text-right">
