@@ -310,10 +310,27 @@ function SettingsPage() {
                   Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
                   {testCfMut.data.statusText}. {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
                 </p>
+                {typeof testCfMut.data.clientsCount === "number" && (
+                  <p>
+                    Načteno <strong>{testCfMut.data.clientsCount}</strong> klientů.
+                  </p>
+                )}
+                {testCfMut.data.clients && testCfMut.data.clients.length > 0 && (
+                  <ul className="mt-1 space-y-1 font-mono text-xs">
+                    {testCfMut.data.clients.map((c, i) => (
+                      <li key={`${c.id ?? i}`}>
+                        {c.id ?? "—"} {c.name && <span className="text-muted-foreground">({c.name})</span>}
+                      </li>
+                    ))}
+                  </ul>
+                )}
                 {testCfMut.data.bodyPreview && (
-                  <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
-                    {testCfMut.data.bodyPreview}
-                  </pre>
+                  <details className="mt-2">
+                    <summary className="cursor-pointer text-xs text-muted-foreground">Odpověď serveru (raw)</summary>
+                    <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
+                      {testCfMut.data.bodyPreview}
+                    </pre>
+                  </details>
                 )}
               </>
             ) : (
