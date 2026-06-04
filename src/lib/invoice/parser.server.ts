@@ -8,6 +8,7 @@ export interface ParsedPolItem {
   unit: string;
   unitPrice: number;
   total: number;
+  vatRate: number;
 }
 
 export interface ParsedInvoiceLine {
@@ -113,7 +114,8 @@ export function parseInvoiceXml(xml: string): ParsedInvoice {
       const lineTotal = unitPrice * (qty || 1);
       const description = asString(pol.POPIS);
       const unit = asString(pol.JEDNOTKA);
-      items.push({ feature, description, quantity: qty, unit, unitPrice, total: lineTotal });
+      const vatRate = asNumber(pol.DPH_PROCENTA);
+      items.push({ feature, description, quantity: qty, unit, unitPrice, total: lineTotal, vatRate });
       if (feature === "PAUSAL") pausal += lineTotal;
       else otherTraffic += lineTotal;
     }
