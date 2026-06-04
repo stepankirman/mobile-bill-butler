@@ -62,11 +62,15 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
   const mm = String(today.getMonth() + 1).padStart(2, "0");
   const yyyy = today.getFullYear();
 
+  const customerIdNum = Number(String(input.clientId).trim());
+  if (!Number.isFinite(customerIdNum) || customerIdNum <= 0) {
+    throw new Error(`CF-control insertInvoice: customerId musí být číslo (dostal jsem "${input.clientId}")`);
+  }
   const payload: Record<string, unknown> = {
-    customerId: input.clientId,
-    invoiceNumberQueue: queue,
+    customerId: customerIdNum,
+    invoiceNumberQueue: Number(queue) || 1,
     invoiceNumberCount: 6,
-    invoiceNumber: 0,
+    invoiceNumber: 1,
     date: `${dd}.${mm}.${yyyy}`,
     paymentType: "bank",
     maturity: 14,
