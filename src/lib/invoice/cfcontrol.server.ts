@@ -98,74 +98,117 @@ export async function notifyClient(input: {
   }
 }
 
+export interface CfTestClient {
+  id?: string;
+  name?: string;
+  phone?: string;
+  email?: string;
+}
+
 export interface CfTestResult {
   ok: boolean;
   status?: number;
   statusText?: string;
   bodyPreview?: string;
   error?: string;
+  message?: string;
+  details?: Array<{ field?: string; message?: string }>;
   testedPath?: string;
+  testedUrl?: string;
   clientsCount?: number;
-  clients?: Array<{ id?: string; name?: string }>;
+  clients?: CfTestClient[];
 }
 
+/**
+ * Mirror of the PHP `CfControl\Api->get('/customer/list', ['limit' => 10])`
+ * call used in test_clients.php — same URL composition, same Authorization
+ * header, same JSON envelope handling.
+ */
 export async function testCfControl(
   override?: Partial<CfControlConfig>,
   customPath?: string,
 ): Promise<CfTestResult> {
   const stored = await loadCfControlConfig();
-  const base = (override?.base_url ?? stored.base_url).trim().replace(/\/+$/, "");
+  let base = (override?.base_url ?? stored.base_url).trim();
   const key = (override?.api_key ?? stored.api_key).trim();
   if (!base) return { ok: false, error: "Chybí URL." };
   if (!key) return { ok: false, error: "Chybí API klíč." };
-  const paths = customPath
-    ? [customPath.startsWith("/") ? customPath : `/${customPath}`]
-    : ["/customer/list?limit=10"];
-  let lastErr: { status?: number; statusText?: string; bodyPreview?: string; testedPath?: string } | null = null;
-  for (const p of paths) {
+  // PHP: pokud apiUrl nekončí lomítkem, přidá ho, pak `apiUrl . ltrim($path, '/')`.
+  if (!base.endsWith("/")) base += "/";
+
+  const rawPath = (customPath && customPath.trim()) || "/customer/list?limit=10";
+  const [pathOnly, queryStr] = rawPath.split("?", 2);
+  const url = base + pathOnly.replace(/^\/+/, "") + (queryStr ? `?${queryStr}` : "");
+
+  try {
+    const res = await fetch(url, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${key}`,
+        Accept: "application/json",
+      },
+    });
+    const txt = await res.text();
+    let parsed: unknown = null;
     try {
-      const res = await fetch(`${base}${p}`, { method: "GET", headers: authHeaders(key) });
-      const txt = await res.text();
-      if (res.ok) {
-        let parsed: unknown = null;
-        try {
-          parsed = txt ? JSON.parse(txt) : null;
-        } catch {
-          parsed = null;
-        }
-        const list = extractClientList(parsed).slice(0, 10);
-        return {
-          ok: true,
-          status: res.status,
-          statusText: res.statusText,
-          bodyPreview: txt.slice(0, 600),
-          testedPath: p,
-          clientsCount: list.length,
-          clients: list,
-        };
-      }
-      lastErr = { status: res.status, statusText: res.statusText, bodyPreview: txt.slice(0, 400), testedPath: p };
-      if (res.status === 401 || res.status === 403) break;
-    } catch (e) {
-      lastErr = { bodyPreview: e instanceof Error ? e.message : String(e), testedPath: p };
+      parsed = txt ? JSON.parse(txt) : null;
+    } catch {
+      parsed = null;
     }
+
+    if (res.ok) {
+      const list = extractClientList(parsed).slice(0, 10);
+      return {
+        ok: true,
+        status: res.status,
+        statusText: res.statusText,
+        bodyPreview: txt.slice(0, 800),
+        testedPath: rawPath,
+        testedUrl: url,
+        clientsCount: list.length,
+        clients: list,
+      };
+    }
+
+    const env = (parsed ?? {}) as Record<string, unknown>;
+    const errorCode = typeof env.error === "string" ? env.error : undefined;
+    const errorMsg = typeof env.message === "string" ? env.message : undefined;
+    const details = Array.isArray(env.details)
+      ? (env.details as Array<Record<string, unknown>>).map((d) => ({
+          field: typeof d.field === "string" ? d.field : undefined,
+          message: typeof d.message === "string" ? d.message : undefined,
+        }))
+      : undefined;
+
+    return {
+      ok: false,
+      status: res.status,
+      statusText: res.statusText,
+      bodyPreview: txt.slice(0, 800),
+      testedPath: rawPath,
+      testedUrl: url,
+      error: errorCode ?? `HTTP ${res.status} ${res.statusText}`,
+      message: errorMsg,
+      details,
+    };
+  } catch (e) {
+    return {
+      ok: false,
+      error: "transport",
+      message: e instanceof Error ? e.message : String(e),
+      testedPath: rawPath,
+      testedUrl: url,
+    };
   }
-  return {
-    ok: false,
-    ...lastErr,
-    error: customPath
-      ? `Endpoint ${customPath} nevrátil 2xx.`
-      : "Žádný známý endpoint pro výpis klientů nevrátil 2xx. Zadejte konkrétní cestu dle dokumentace.",
-  };
 }
 
-function extractClientList(data: unknown): Array<{ id?: string; name?: string }> {
+function extractClientList(data: unknown): CfTestClient[] {
   if (!data) return [];
   let arr: unknown[] | null = null;
   if (Array.isArray(data)) arr = data;
   else if (typeof data === "object") {
     const obj = data as Record<string, unknown>;
-    for (const k of ["data", "items", "clients", "results", "rows"]) {
+    for (const k of ["data", "items", "clients", "customers", "results", "rows", "list"]) {
       if (Array.isArray(obj[k])) {
         arr = obj[k] as unknown[];
         break;
@@ -177,14 +220,26 @@ function extractClientList(data: unknown): Array<{ id?: string; name?: string }>
     const o = (it ?? {}) as Record<string, unknown>;
     const id =
       (o.id as string | undefined) ??
+      (o.customer_id as string | undefined) ??
+      (o.cid as string | undefined) ??
       (o.client_id as string | undefined) ??
       (o.uuid as string | undefined);
+    const fn = (o.firstname as string | undefined) ?? (o.first_name as string | undefined) ?? "";
+    const ln = (o.lastname as string | undefined) ?? (o.last_name as string | undefined) ?? "";
     const name =
       (o.name as string | undefined) ??
       (o.full_name as string | undefined) ??
       (o.title as string | undefined) ??
-      ([o.first_name, o.last_name].filter(Boolean).join(" ") || undefined);
-    return { id: id != null ? String(id) : undefined, name };
+      ([fn, ln].filter(Boolean).join(" ").trim() || undefined);
+    const phone = (o.phone as string | undefined) ?? (o.mobile as string | undefined);
+    const email = o.email as string | undefined;
+    return {
+      id: id != null ? String(id) : undefined,
+      name,
+      phone,
+      email,
+    };
   });
 }
+
 
