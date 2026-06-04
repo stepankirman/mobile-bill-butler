@@ -1,9 +1,21 @@
 import { PDFDocument, StandardFonts, rgb } from "pdf-lib";
 import type { ParsedInvoice, ParsedInvoiceLine } from "./parser.server";
 
+function decodeEntities(s: string): string {
+  if (!s) return s;
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 // pdf-lib's StandardFonts (WinAnsi) lack many Czech glyphs; strip diacritics.
 function ascii(s: string): string {
-  return s
+  return decodeEntities(s ?? "")
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
     .replace(/[^\x20-\x7E]/g, "?");
@@ -11,6 +23,11 @@ function ascii(s: string): string {
 
 function fmt(n: number): string {
   return n.toFixed(2);
+}
+
+function fmtQty(n: number | null | undefined): string {
+  if (n === null || n === undefined || Number.isNaN(Number(n))) return "—";
+  return Number(n).toFixed(2);
 }
 
 export interface InvoicePdfInput {
