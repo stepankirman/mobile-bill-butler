@@ -147,11 +147,19 @@ export const listInvoices = createServerFn({ method: "GET" })
     return { invoices: data ?? [] };
   });
 
+function stripDiacritics(s: string): string {
+  return (s || "")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+}
+
 export const searchInvoices = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
   .inputValidator(z.object({ query: z.string().min(1).max(200) }))
   .handler(async ({ data }) => {
     const q = data.query.trim();
+    const qNorm = stripDiacritics(q);
     const digits = q.replace(/\D/g, "");
     const results: Array<{
       invoice_id: string;
@@ -197,19 +205,23 @@ export const searchInvoices = createServerFn({ method: "POST" })
       }
     }
 
+    // Diacritics-insensitive name search: fetch a wide set then filter in JS.
     const { data: cis } = await supabaseAdmin
       .from("customer_invoices")
       .select("invoice_id, client_name, phone_numbers, total_amount")
-      .ilike("client_name", `%${q}%`)
-      .limit(200);
-    if (cis && cis.length > 0) {
-      const ids = Array.from(new Set(cis.map((c) => c.invoice_id)));
+      .not("client_name", "is", null)
+      .limit(1000);
+    const matchedCis = (cis ?? []).filter((c) =>
+      stripDiacritics(c.client_name ?? "").includes(qNorm),
+    );
+    if (matchedCis.length > 0) {
+      const ids = Array.from(new Set(matchedCis.map((c) => c.invoice_id)));
       const { data: invs } = await supabaseAdmin
         .from("invoices")
         .select("id, xml_number, issued_at")
         .in("id", ids);
       const invMap = new Map((invs ?? []).map((i) => [i.id, i]));
-      for (const c of cis) {
+      for (const c of matchedCis) {
         const inv = invMap.get(c.invoice_id);
         if (!inv) continue;
         results.push({
