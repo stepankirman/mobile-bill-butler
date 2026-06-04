@@ -100,15 +100,17 @@ export async function notifyClient(input: {
 
 export async function testCfControl(
   override?: Partial<CfControlConfig>,
-): Promise<{ ok: boolean; status?: number; statusText?: string; bodyPreview?: string; error?: string }> {
+  customPath?: string,
+): Promise<{ ok: boolean; status?: number; statusText?: string; bodyPreview?: string; error?: string; testedPath?: string }> {
   const stored = await loadCfControlConfig();
   const base = (override?.base_url ?? stored.base_url).trim().replace(/\/+$/, "");
   const key = (override?.api_key ?? stored.api_key).trim();
   if (!base) return { ok: false, error: "Chybí URL." };
   if (!key) return { ok: false, error: "Chybí API klíč." };
-  // Try a few benign GET endpoints to verify credentials.
-  const paths = ["/receivables?limit=1", "/clients?limit=1", "/"];
-  let lastErr: { status?: number; statusText?: string; bodyPreview?: string } | null = null;
+  const paths = customPath
+    ? [customPath.startsWith("/") ? customPath : `/${customPath}`]
+    : ["/api/receivables?limit=1", "/api/v1/receivables?limit=1", "/receivables?limit=1", "/api/clients?limit=1", "/clients?limit=1", "/api", "/"];
+  let lastErr: { status?: number; statusText?: string; bodyPreview?: string; testedPath?: string } | null = null;
   for (const p of paths) {
     try {
       const res = await fetch(`${base}${p}`, { method: "GET", headers: authHeaders(key) });
@@ -119,14 +121,14 @@ export async function testCfControl(
           status: res.status,
           statusText: res.statusText,
           bodyPreview: txt.slice(0, 300),
+          testedPath: p,
         };
       }
-      lastErr = { status: res.status, statusText: res.statusText, bodyPreview: txt.slice(0, 300) };
-      // If we got an auth failure, no point trying further paths.
+      lastErr = { status: res.status, statusText: res.statusText, bodyPreview: txt.slice(0, 300), testedPath: p };
       if (res.status === 401 || res.status === 403) break;
     } catch (e) {
-      lastErr = { bodyPreview: e instanceof Error ? e.message : String(e) };
+      lastErr = { bodyPreview: e instanceof Error ? e.message : String(e), testedPath: p };
     }
   }
-  return { ok: false, ...lastErr, error: "Žádný testovací endpoint nevrátil 2xx." };
+  return { ok: false, ...lastErr, error: customPath ? `Endpoint ${customPath} nevrátil 2xx.` : "Žádný testovací endpoint nevrátil 2xx. Zkuste zadat konkrétní cestu." };
 }
