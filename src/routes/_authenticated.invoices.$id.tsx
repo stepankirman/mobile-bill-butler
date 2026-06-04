@@ -18,7 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Download, Send, ChevronDown, ChevronRight } from "lucide-react";
+import { Download, Eye, Send, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 export const Route = createFileRoute("/_authenticated/invoices/$id")({
@@ -101,36 +101,50 @@ function InvoiceDetailPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
   });
 
-  async function openPdf(path: string | null) {
+  async function getPdfBlobUrl(path: string): Promise<string> {
+    const { url } = await signFn({ data: { path } });
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("fetch failed");
+    const blob = await res.blob();
+    const pdfBlob =
+      blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+    return URL.createObjectURL(pdfBlob);
+  }
+
+  async function viewPdf(path: string | null) {
     if (!path) {
       toast.error("PDF pro tuto položku neexistuje.");
       return;
     }
-    // Open the tab synchronously to avoid popup blockers
     const win = window.open("about:blank", "_blank");
     try {
-      const { url } = await signFn({ data: { path } });
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("fetch failed");
-        const blob = await res.blob();
-        const pdfBlob = blob.type === "application/pdf"
-          ? blob
-          : new Blob([blob], { type: "application/pdf" });
-        const blobUrl = URL.createObjectURL(pdfBlob);
-        if (win) {
-          win.location.href = blobUrl;
-        } else {
-          window.location.href = blobUrl;
-        }
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-      } catch {
-        if (win) win.location.href = url;
-        else window.location.href = url;
-      }
+      const blobUrl = await getPdfBlobUrl(path);
+      if (win) win.location.href = blobUrl;
+      else window.location.href = blobUrl;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e) {
       if (win) win.close();
-      toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
+      toast.error(e instanceof Error ? e.message : "Nelze zobrazit PDF");
+    }
+  }
+
+  async function downloadPdf(path: string | null) {
+    if (!path) {
+      toast.error("PDF pro tuto položku neexistuje.");
+      return;
+    }
+    try {
+      const blobUrl = await getPdfBlobUrl(path);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = path.split("/").pop() || "invoice.pdf";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Nelze stáhnout PDF");
     }
   }
 
@@ -175,9 +189,12 @@ function InvoiceDetailPage() {
             </p>
           </div>
         </CardHeader>
-        <CardContent>
-          <Button variant="outline" onClick={() => openPdf(invoice.pdf_storage_path)}>
-            <Download className="mr-2 h-4 w-4" /> Souhrnné PDF
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => viewPdf(invoice.pdf_storage_path)}>
+            <Eye className="mr-2 h-4 w-4" /> Zobrazit PDF
+          </Button>
+          <Button variant="outline" onClick={() => downloadPdf(invoice.pdf_storage_path)}>
+            <Download className="mr-2 h-4 w-4" /> Stáhnout PDF
           </Button>
         </CardContent>
       </Card>
@@ -231,8 +248,18 @@ function InvoiceDetailPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openPdf(c.pdf_storage_path)}
+                      onClick={() => viewPdf(c.pdf_storage_path)}
                       disabled={!c.pdf_storage_path}
+                      title="Zobrazit PDF"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadPdf(c.pdf_storage_path)}
+                      disabled={!c.pdf_storage_path}
+                      title="Stáhnout PDF"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
