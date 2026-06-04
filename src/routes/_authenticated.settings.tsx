@@ -47,12 +47,14 @@ function SettingsPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba"),
   });
 
+  const [cfTestPath, setCfTestPath] = useState("");
   const testCfMut = useMutation({
     mutationFn: () =>
       testCfFn({
         data: {
           base_url: cfUrl || undefined,
           api_key: cfKey || undefined,
+          test_path: cfTestPath || undefined,
         },
       }),
   });
@@ -254,6 +256,18 @@ function SettingsPage() {
                   </p>
                 )}
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="cfTestPath">Testovací cesta (volitelné)</Label>
+                <Input
+                  id="cfTestPath"
+                  value={cfTestPath}
+                  onChange={(e) => setCfTestPath(e.target.value)}
+                  placeholder="/api/receivables?limit=1"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Pokud necháte prázdné, vyzkouší se několik běžných GET endpointů.
+                </p>
+              </div>
               <div className="flex gap-2 pt-2">
                 <Button onClick={() => saveCfMut.mutate()} disabled={saveCfMut.isPending || !cfUrl.trim()}>
                   {saveCfMut.isPending ? (
@@ -294,7 +308,7 @@ function SettingsPage() {
               <>
                 <p>
                   Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
-                  {testCfMut.data.statusText}.
+                  {testCfMut.data.statusText}. {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
                 </p>
                 {testCfMut.data.bodyPreview && (
                   <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
@@ -307,7 +321,7 @@ function SettingsPage() {
                 <p className="text-destructive">{testCfMut.data.error}</p>
                 {testCfMut.data.status !== undefined && (
                   <p>
-                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText}
+                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText} {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
                   </p>
                 )}
                 {testCfMut.data.bodyPreview && (
