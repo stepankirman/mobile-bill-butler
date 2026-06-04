@@ -175,15 +175,15 @@ function InvoiceDetailPage() {
   return (
     <div className="space-y-6">
       <Dialog open={!!pdfPreview} onOpenChange={(open) => !open && setPdfPreview(null)}>
-        <DialogContent className="h-[92vh] max-w-[95vw] gap-0 overflow-hidden p-0">
-          <DialogHeader className="border-b px-4 py-3 pr-12">
+        <DialogContent className="flex h-[95vh] w-[95vw] max-w-[95vw] flex-col gap-0 overflow-hidden p-0">
+          <DialogHeader className="shrink-0 border-b px-4 py-3 pr-12">
             <DialogTitle>{pdfPreview?.name ?? "PDF faktury"}</DialogTitle>
           </DialogHeader>
           {pdfPreview && (
             <iframe
               src={pdfPreview.url}
               title="Náhled PDF faktury"
-              className="h-full min-h-0 w-full"
+              className="w-full flex-1"
             />
           )}
         </DialogContent>
