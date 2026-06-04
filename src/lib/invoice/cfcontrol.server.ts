@@ -46,55 +46,67 @@ export interface CreateReceivableInput {
   dueDate?: string;
 }
 
+/**
+ * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
+ * POST `${apiUrl}?action=insertInvoice` with form-urlencoded `settings[..]` body
+ * and the `Cf-API-Authorization` header.
+ */
 export async function createReceivable(input: CreateReceivableInput): Promise<{ id: string; raw: unknown }> {
   const { base, key } = await resolved();
-  const res = await fetch(`${base}/receivables`, {
-    method: "POST",
-    headers: authHeaders(key),
-    body: JSON.stringify({
-      client_id: input.clientId,
-      amount: input.amount,
-      currency: input.currency,
-      description: input.description,
-      variable_symbol: input.variableSymbol,
-      due_date: input.dueDate,
-    }),
-  });
-  const text = await res.text();
-  let json: unknown = null;
-  try {
-    json = text ? JSON.parse(text) : null;
-  } catch {
-    json = text;
+  const today = new Date();
+  const dd = String(today.getDate()).padStart(2, "0");
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const yyyy = today.getFullYear();
+
+  const payload: Record<string, unknown> = {
+    customerId: input.clientId,
+    invoiceNumberQueue: Number(process.env.CF_CONTROL_INVOICE_QUEUE || 1),
+    invoiceNumberCount: 6,
+    invoiceNumber: 0,
+    date: `${dd}.${mm}.${yyyy}`,
+    paymentType: "bank",
+    maturity: 14,
+    priceType: 1,
+    variableSymbol: input.variableSymbol,
+    items: [
+      {
+        name: input.description,
+        amount: 1,
+        unit: "ks",
+        price: input.amount,
+        sale: 0,
+        saleInPrice: 0,
+      },
+    ],
+  };
+
+  const url = buildCfControlV1Url(base, "insertInvoice", {});
+  const res = await cfControlV1Post(url, key, payload);
+  const parsed = parseCfControlJson(res.text);
+  const env = (parsed ?? {}) as Record<string, unknown>;
+  const errors = extractCfApiErrors(parsed);
+  const result = typeof env.result === "string" ? env.result : undefined;
+  const apiOk = res.status >= 200 && res.status < 300 && result !== "CF_API_RESULT_ERROR" && errors.length === 0;
+  if (!apiOk) {
+    const msg = errors[0]?.message ?? `HTTP ${res.status}: ${res.text.slice(0, 400)}`;
+    throw new Error(`CF-control insertInvoice: ${msg}`);
   }
-  if (!res.ok) {
-    throw new Error(`CF-control createReceivable ${res.status}: ${text.slice(0, 500)}`);
-  }
-  const data = (json ?? {}) as Record<string, unknown>;
-  const id = String(data.id ?? (data.data as Record<string, unknown> | undefined)?.id ?? "");
-  return { id, raw: json };
+  const data = (env.data ?? {}) as Record<string, unknown>;
+  const id = String(data.invoiceId ?? data.id ?? data.invoice_id ?? "");
+  return { id, raw: parsed };
 }
 
-export async function notifyClient(input: {
+export async function notifyClient(_input: {
   clientId: string;
   receivableId: string;
   subject: string;
   body: string;
 }): Promise<void> {
-  const { base, key } = await resolved();
-  const res = await fetch(`${base}/clients/${encodeURIComponent(input.clientId)}/notify`, {
-    method: "POST",
-    headers: authHeaders(key),
-    body: JSON.stringify({
-      receivable_id: input.receivableId,
-      subject: input.subject,
-      body: input.body,
-    }),
-  });
-  if (!res.ok) {
-    const text = await res.text();
-    throw new Error(`CF-control notifyClient ${res.status}: ${text.slice(0, 500)}`);
-  }
+  // CF-control v1 API nemá v dokumentaci doložený endpoint pro odeslání e-mailu
+  // klientovi z aplikace mimo standardní upozornění na fakturu. Pro nyní je
+  // odeslání faktury (insertInvoice) zároveň zaúčtováním v CF-control;
+  // e-mailovou notifikaci řeší CF-control sám podle nastavení šablon.
+  return;
 }
 
 export interface CfTestClient {
@@ -231,6 +243,93 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
         status: match ? Number(match[1]) : 0,
         statusText: match?.[2] ?? "",
         text: body,
+      });
+    });
+  });
+}
+
+function flattenSettings(obj: Record<string, unknown>, prefix = "settings"): string[] {
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    const key = `${prefix}[${k}]`;
+    if (Array.isArray(v)) {
+      v.forEach((item, i) => {
+        if (item !== null && typeof item === "object") {
+          out.push(...flattenSettings(item as Record<string, unknown>, `${key}[${i}]`));
+        } else {
+          out.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
+        }
+      });
+    } else if (typeof v === "object") {
+      out.push(...flattenSettings(v as Record<string, unknown>, key));
+    } else {
+      out.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
+    }
+  }
+  return out;
+}
+
+async function cfControlV1Post(
+  url: string,
+  apiKey: string,
+  data: Record<string, unknown>,
+): Promise<{ status: number; statusText: string; text: string }> {
+  const body = flattenSettings(data).join("&");
+  const target = new URL(url);
+  if (target.protocol !== "https:") {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Cf-API-Authorization": apiKey,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    return { status: res.status, statusText: res.statusText, text: await res.text() };
+  }
+
+  const { connect } = await import("node:tls");
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: target.hostname, port: Number(target.port || 443), servername: target.hostname });
+    const chunks: Buffer[] = [];
+    socket.setTimeout(15000);
+    socket.once("secureConnect", () => {
+      socket.write(
+        [
+          `POST ${target.pathname}${target.search} HTTP/1.1`,
+          `Host: ${target.host}`,
+          "User-Agent: TeamCity-Invoice-App/1.0",
+          "Accept: application/json",
+          `Cf-API-Authorization: ${apiKey}`,
+          "Content-Type: application/x-www-form-urlencoded",
+          `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+          "Connection: close",
+          "",
+          body,
+        ].join("\r\n"),
+      );
+    });
+    socket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    socket.once("timeout", () => {
+      socket.destroy(new Error("Timeout při volání CF-control API."));
+    });
+    socket.once("error", reject);
+    socket.once("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const [head = "", ...bodyParts] = raw.split("\r\n\r\n");
+      const headLines = head.split("\r\n");
+      const statusLine = headLines[0] ?? "";
+      const match = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d+)\s*(.*)$/);
+      const isChunked = headLines
+        .slice(1)
+        .some((l) => /^transfer-encoding:\s*chunked/i.test(l));
+      let respBody = bodyParts.join("\r\n\r\n");
+      if (isChunked) respBody = dechunk(respBody);
+      resolve({
+        status: match ? Number(match[1]) : 0,
+        statusText: match?.[2] ?? "",
+        text: respBody,
       });
     });
   });
