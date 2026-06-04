@@ -53,6 +53,11 @@ function UploadPage() {
       try {
         const text = await file.text();
         const res = await processFn({ data: { xml: text } });
+        if (!res || typeof res.invoiceId !== "string") {
+          throw new Error(
+            "Server nevrátil platnou odpověď (možná timeout). Zkuste soubor nahrát znovu.",
+          );
+        }
         lastOkId = res.invoiceId;
         okCount++;
         setResults((prev) =>
