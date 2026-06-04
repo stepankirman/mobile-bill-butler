@@ -258,21 +258,21 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
   });
 }
 
-function flattenSettings(obj: Record<string, unknown>, prefix = "settings"): string[] {
+function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] {
   const out: string[] = [];
   for (const [k, v] of Object.entries(obj)) {
     if (v === undefined || v === null) continue;
-    const key = `${prefix}[${k}]`;
+    const key = prefix ? `${prefix}[${k}]` : k;
     if (Array.isArray(v)) {
       v.forEach((item, i) => {
         if (item !== null && typeof item === "object") {
-          out.push(...flattenSettings(item as Record<string, unknown>, `${key}[${i}]`));
+          out.push(...flattenFormFields(item as Record<string, unknown>, `${key}[${i}]`));
         } else {
           out.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
         }
       });
     } else if (typeof v === "object") {
-      out.push(...flattenSettings(v as Record<string, unknown>, key));
+      out.push(...flattenFormFields(v as Record<string, unknown>, key));
     } else {
       out.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
     }
@@ -285,7 +285,7 @@ async function cfControlV1Post(
   apiKey: string,
   data: Record<string, unknown>,
 ): Promise<{ status: number; statusText: string; text: string }> {
-  const body = flattenSettings(data).join("&");
+  const body = flattenFormFields(data).join("&");
   const target = new URL(url);
   if (target.protocol !== "https:") {
     const res = await fetch(url, {
