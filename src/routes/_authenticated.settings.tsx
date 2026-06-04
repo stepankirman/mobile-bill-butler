@@ -234,10 +234,10 @@ function SettingsPage() {
                   id="cfUrl"
                   value={cfUrl}
                   onChange={(e) => setCfUrl(e.target.value)}
-                  placeholder="https://app.cf-control.cz/api"
+                  placeholder="https://demo.cf-control.cz/api/web/v2"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Bez koncového lomítka. Volá se např. <code>{`{URL}/receivables`}</code>.
+                  Např. <code>https://&lt;instance&gt;.cf-control.cz/api/web/v2</code>. Bez koncového lomítka.
                 </p>
               </div>
               <div className="space-y-2">
@@ -262,10 +262,10 @@ function SettingsPage() {
                   id="cfTestPath"
                   value={cfTestPath}
                   onChange={(e) => setCfTestPath(e.target.value)}
-                  placeholder="/api/receivables?limit=1"
+                  placeholder="/customer/list?limit=10"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pokud necháte prázdné, vyzkouší se několik běžných GET endpointů.
+                  Pokud necháte prázdné, zavolá se <code>GET /customer/list?limit=10</code>.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">

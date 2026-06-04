@@ -120,12 +120,7 @@ export async function testCfControl(
   if (!key) return { ok: false, error: "Chybí API klíč." };
   const paths = customPath
     ? [customPath.startsWith("/") ? customPath : `/${customPath}`]
-    : [
-        "/clients?limit=10",
-        "/api/clients?limit=10",
-        "/api/v1/clients?limit=10",
-        "/v1/clients?limit=10",
-      ];
+    : ["/customer/list?limit=10"];
   let lastErr: { status?: number; statusText?: string; bodyPreview?: string; testedPath?: string } | null = null;
   for (const p of paths) {
     try {
