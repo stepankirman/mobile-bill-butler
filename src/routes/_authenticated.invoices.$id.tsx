@@ -1,4 +1,4 @@
-import { Fragment, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,12 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import {
   Table,
   TableBody,
@@ -86,6 +92,13 @@ function InvoiceDetailPage() {
   const signFn = useServerFn(getPdfSignedUrl);
   const importFn = useServerFn(importCustomerInvoice);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [pdfPreview, setPdfPreview] = useState<{ url: string; name: string } | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (pdfPreview?.url) URL.revokeObjectURL(pdfPreview.url);
+    };
+  }, [pdfPreview?.url]);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["invoice", id],
@@ -116,14 +129,10 @@ function InvoiceDetailPage() {
       toast.error("PDF pro tuto položku neexistuje.");
       return;
     }
-    const win = window.open("about:blank", "_blank");
     try {
       const blobUrl = await getPdfBlobUrl(path);
-      if (win) win.location.href = blobUrl;
-      else window.location.href = blobUrl;
-      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      setPdfPreview({ url: blobUrl, name: path.split("/").pop() || "invoice.pdf" });
     } catch (e) {
-      if (win) win.close();
       toast.error(e instanceof Error ? e.message : "Nelze zobrazit PDF");
     }
   }
@@ -165,6 +174,21 @@ function InvoiceDetailPage() {
 
   return (
     <div className="space-y-6">
+      <Dialog open={!!pdfPreview} onOpenChange={(open) => !open && setPdfPreview(null)}>
+        <DialogContent className="h-[92vh] max-w-[95vw] gap-0 overflow-hidden p-0">
+          <DialogHeader className="border-b px-4 py-3 pr-12">
+            <DialogTitle>{pdfPreview?.name ?? "PDF faktury"}</DialogTitle>
+          </DialogHeader>
+          {pdfPreview && (
+            <iframe
+              src={pdfPreview.url}
+              title="Náhled PDF faktury"
+              className="h-full min-h-0 w-full"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+
       <Card>
         <CardHeader className="flex flex-row items-start justify-between gap-4">
           <div>
