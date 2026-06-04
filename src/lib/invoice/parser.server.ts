@@ -51,9 +51,24 @@ function asNumber(v: unknown): number {
   return Number.isFinite(n) ? n : 0;
 }
 
+function decodeEntities(s: string): string {
+  return s
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h) => {
+      try { return String.fromCodePoint(parseInt(h, 16)); } catch { return _; }
+    })
+    .replace(/&#(\d+);/g, (_, d) => {
+      try { return String.fromCodePoint(parseInt(d, 10)); } catch { return _; }
+    })
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&apos;/g, "'");
+}
+
 function asString(v: unknown): string {
   if (v == null) return "";
-  return String(v).trim();
+  return decodeEntities(String(v).trim());
 }
 
 // Erbia/Laudatio puts repeated children inside a parent under keys "item0",
