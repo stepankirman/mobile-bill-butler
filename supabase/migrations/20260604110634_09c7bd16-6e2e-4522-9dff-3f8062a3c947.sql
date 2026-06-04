@@ -1,0 +1,1 @@
+UPDATE public.app_settings SET value = jsonb_set(value, '{base_url}', '"https://cf.teamcity.cz/api/web/v1/"'), updated_at = now() WHERE key = 'cf_control';
