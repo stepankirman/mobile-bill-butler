@@ -80,16 +80,33 @@ function InvoiceDetailPage() {
       toast.error("PDF pro tuto položku neexistuje.");
       return;
     }
+    const win = window.open("", "_blank");
     try {
       const { url } = await signFn({ data: { path } });
-      const a = document.createElement("a");
-      a.href = url;
-      a.target = "_blank";
-      a.rel = "noopener noreferrer";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error("fetch failed");
+        const blob = await res.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        if (win) {
+          win.location.href = blobUrl;
+        } else {
+          const a = document.createElement("a");
+          a.href = blobUrl;
+          a.target = "_blank";
+          a.rel = "noopener noreferrer";
+          a.download = path.split("/").pop() || "invoice.pdf";
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+        }
+        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+      } catch {
+        if (win) win.location.href = url;
+        else window.location.href = url;
+      }
     } catch (e) {
+      if (win) win.close();
       toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
     }
   }
