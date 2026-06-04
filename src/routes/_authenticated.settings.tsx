@@ -2,7 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { useServerFn } from "@tanstack/react-start";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useEffect, useState } from "react";
-import { getSheetSettings, saveSheetSettings, testSheetSettings } from "@/lib/invoice/settings.functions";
+import { getSheetSettings, saveSheetSettings, testSheetSettings, getCfControlSettings, saveCfControlSettings, testCfControlSettings } from "@/lib/invoice/settings.functions";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
