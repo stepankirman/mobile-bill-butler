@@ -90,8 +90,12 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     ],
   };
 
-  const url = buildCfControlV1Url(base, "insertInvoice", {});
-  const res = await cfControlV1Post(url, key, payload);
+  // CF-control v1 validates POST actions against `settings[...]` from the
+  // request URL (same shape as their documented PHP client). Sending these
+  // values only in the form body can make numeric fields such as customerId
+  // fail validation even when the value itself is numeric.
+  const url = buildCfControlV1Url(base, "insertInvoice", payload);
+  const res = await cfControlV1Post(url, key, {});
   const parsed = parseCfControlJson(res.text);
   const env = (parsed ?? {}) as Record<string, unknown>;
   const errors = extractCfApiErrors(parsed);
