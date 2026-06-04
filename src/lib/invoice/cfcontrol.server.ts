@@ -248,6 +248,93 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
   });
 }
 
+function flattenSettings(obj: Record<string, unknown>, prefix = "settings"): string[] {
+  const out: string[] = [];
+  for (const [k, v] of Object.entries(obj)) {
+    if (v === undefined || v === null) continue;
+    const key = `${prefix}[${k}]`;
+    if (Array.isArray(v)) {
+      v.forEach((item, i) => {
+        if (item !== null && typeof item === "object") {
+          out.push(...flattenSettings(item as Record<string, unknown>, `${key}[${i}]`));
+        } else {
+          out.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
+        }
+      });
+    } else if (typeof v === "object") {
+      out.push(...flattenSettings(v as Record<string, unknown>, key));
+    } else {
+      out.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
+    }
+  }
+  return out;
+}
+
+async function cfControlV1Post(
+  url: string,
+  apiKey: string,
+  data: Record<string, unknown>,
+): Promise<{ status: number; statusText: string; text: string }> {
+  const body = flattenSettings(data).join("&");
+  const target = new URL(url);
+  if (target.protocol !== "https:") {
+    const res = await fetch(url, {
+      method: "POST",
+      headers: {
+        "Cf-API-Authorization": apiKey,
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body,
+    });
+    return { status: res.status, statusText: res.statusText, text: await res.text() };
+  }
+
+  const { connect } = await import("node:tls");
+  return new Promise((resolve, reject) => {
+    const socket = connect({ host: target.hostname, port: Number(target.port || 443), servername: target.hostname });
+    const chunks: Buffer[] = [];
+    socket.setTimeout(15000);
+    socket.once("secureConnect", () => {
+      socket.write(
+        [
+          `POST ${target.pathname}${target.search} HTTP/1.1`,
+          `Host: ${target.host}`,
+          "User-Agent: TeamCity-Invoice-App/1.0",
+          "Accept: application/json",
+          `Cf-API-Authorization: ${apiKey}`,
+          "Content-Type: application/x-www-form-urlencoded",
+          `Content-Length: ${Buffer.byteLength(body, "utf8")}`,
+          "Connection: close",
+          "",
+          body,
+        ].join("\r\n"),
+      );
+    });
+    socket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    socket.once("timeout", () => {
+      socket.destroy(new Error("Timeout při volání CF-control API."));
+    });
+    socket.once("error", reject);
+    socket.once("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const [head = "", ...bodyParts] = raw.split("\r\n\r\n");
+      const headLines = head.split("\r\n");
+      const statusLine = headLines[0] ?? "";
+      const match = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d+)\s*(.*)$/);
+      const isChunked = headLines
+        .slice(1)
+        .some((l) => /^transfer-encoding:\s*chunked/i.test(l));
+      let respBody = bodyParts.join("\r\n\r\n");
+      if (isChunked) respBody = dechunk(respBody);
+      resolve({
+        status: match ? Number(match[1]) : 0,
+        statusText: match?.[2] ?? "",
+        text: respBody,
+      });
+    });
+  });
+}
+
 function extractCfApiErrors(data: unknown): Array<{ key?: string; field?: string; message?: string }> {
   if (!data || typeof data !== "object") return [];
   const error = (data as Record<string, unknown>).error;
