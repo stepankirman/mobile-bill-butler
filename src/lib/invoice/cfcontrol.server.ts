@@ -171,44 +171,46 @@ function parseCfControlJson(text: string): unknown | null {
 
 async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: number; statusText: string; text: string }> {
   const target = new URL(url);
-  if (target.protocol !== "https:" && target.protocol !== "http:") {
+  if (target.protocol !== "https:") {
     const res = await fetch(url, { headers: { "Cf-API-Authorization": apiKey } });
     return { status: res.status, statusText: res.statusText, text: await res.text() };
   }
 
-  const client = target.protocol === "https:" ? await import("node:https") : await import("node:http");
+  const { connect } = await import("node:tls");
   return new Promise((resolve, reject) => {
-    const request = client.request(
-      target,
-      {
-        method: "GET",
-        timeout: 10000,
-        headers: {
-          Accept: "application/json",
-          "User-Agent": "TeamCity-Invoice-App/1.0",
-          "Cf-API-Authorization": apiKey,
-        },
-      },
-      (response) => {
-        let text = "";
-        response.setEncoding("utf8");
-        response.on("data", (chunk) => {
-          text += chunk;
-        });
-        response.on("end", () => {
-          resolve({
-            status: response.statusCode ?? 0,
-            statusText: response.statusMessage ?? "",
-            text,
-          });
-        });
-      },
-    );
-    request.once("timeout", () => {
-      request.destroy(new Error("Timeout při volání CF-control API."));
+    const socket = connect({ host: target.hostname, port: Number(target.port || 443), servername: target.hostname });
+    const chunks: Buffer[] = [];
+    socket.setTimeout(10000);
+    socket.once("secureConnect", () => {
+      socket.write(
+        [
+          `GET ${target.pathname}${target.search} HTTP/1.1`,
+          `Host: ${target.host}`,
+          "User-Agent: TeamCity-Invoice-App/1.0",
+          "Accept: application/json",
+          `Cf-API-Authorization: ${apiKey}`,
+          "Connection: close",
+          "",
+          "",
+        ].join("\r\n"),
+      );
     });
-    request.once("error", reject);
-    request.end();
+    socket.on("data", (chunk) => chunks.push(Buffer.from(chunk)));
+    socket.once("timeout", () => {
+      socket.destroy(new Error("Timeout při volání CF-control API."));
+    });
+    socket.once("error", reject);
+    socket.once("end", () => {
+      const raw = Buffer.concat(chunks).toString("utf8");
+      const [head = "", ...bodyParts] = raw.split("\r\n\r\n");
+      const statusLine = head.split("\r\n")[0] ?? "";
+      const match = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d+)\s*(.*)$/);
+      resolve({
+        status: match ? Number(match[1]) : 0,
+        statusText: match?.[2] ?? "",
+        text: bodyParts.join("\r\n\r\n"),
+      });
+    });
   });
 }
 
