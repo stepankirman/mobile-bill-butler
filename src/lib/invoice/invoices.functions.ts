@@ -327,14 +327,21 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
         ? ci.phone_numbers.map((p) => normalizePhone(String(p))).filter(Boolean)
         : [];
       const freshClientId = phoneNumbers.map((p) => mapping.byPhone.get(p)?.trim()).find(Boolean);
-      const hasCurrentSheetRow = phoneNumbers.some((p) => mapping.byPhone.has(p) || mapping.byPhoneName.has(p));
+      const hasCurrentSheetRow = phoneNumbers.some(
+        (p) => mapping.byPhone.has(p) || mapping.byPhoneName.has(p),
+      );
       const storedClientId = String(ci.cf_control_client_id ?? "").trim();
       const clientId = freshClientId ?? (hasCurrentSheetRow ? "" : storedClientId);
       if (!clientId) {
-        throw new Error(`Chybí ID klienta v Google Sheets pro telefon ${phoneNumbers.join(", ") || "—"}`);
+        throw new Error(
+          `Chybí ID klienta v Google Sheets pro telefon ${phoneNumbers.join(", ") || "—"}`,
+        );
       }
       if (clientId !== storedClientId) {
-        await supabaseAdmin.from("customer_invoices").update({ cf_control_client_id: clientId }).eq("id", ci.id);
+        await supabaseAdmin
+          .from("customer_invoices")
+          .update({ cf_control_client_id: clientId })
+          .eq("id", ci.id);
       }
       const { id: receivableId } = await createReceivable({
         clientId,
