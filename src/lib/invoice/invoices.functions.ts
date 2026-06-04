@@ -305,7 +305,12 @@ export const getPdfSignedUrl = createServerFn({ method: "POST" })
 
 export const importCustomerInvoice = createServerFn({ method: "POST" })
   .middleware([requireSupabaseAuth])
-  .inputValidator(z.object({ customerInvoiceId: z.string().uuid() }))
+  .inputValidator(
+    z.object({
+      customerInvoiceId: z.string().uuid(),
+      skipEmail: z.boolean().optional().default(false),
+    }),
+  )
   .handler(async ({ data }) => {
     const { data: ci, error } = await supabaseAdmin
       .from("customer_invoices")
@@ -324,24 +329,26 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
         description: `Mobilní vyúčtování – faktura ${inv.xml_number}`,
         variableSymbol: inv.xml_number,
       });
-      await notifyClient({
-        clientId: ci.cf_control_client_id,
-        receivableId,
-        subject: `Vyúčtování mobilních služeb – ${inv.xml_number}`,
-        body: `Dobrý den,\n\nvyúčtování mobilních služeb za období fakturuje částku ${Number(
-          ci.total_amount,
-        ).toFixed(2)} ${inv.currency}.\n\nDěkujeme.`,
-      });
+      if (!data.skipEmail) {
+        await notifyClient({
+          clientId: ci.cf_control_client_id,
+          receivableId,
+          subject: `Vyúčtování mobilních služeb – ${inv.xml_number}`,
+          body: `Dobrý den,\n\nvyúčtování mobilních služeb za období fakturuje částku ${Number(
+            ci.total_amount,
+          ).toFixed(2)} ${inv.currency}.\n\nDěkujeme.`,
+        });
+      }
       await supabaseAdmin
         .from("customer_invoices")
         .update({
-          cf_status: "sent",
+          cf_status: data.skipEmail ? "imported" : "sent",
           cf_error: null,
           cf_receivable_id: receivableId,
-          email_sent_at: new Date().toISOString(),
+          email_sent_at: data.skipEmail ? null : new Date().toISOString(),
         })
         .eq("id", ci.id);
-      return { ok: true, receivableId };
+      return { ok: true, receivableId, skipEmail: !!data.skipEmail };
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       await supabaseAdmin
