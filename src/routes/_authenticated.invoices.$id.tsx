@@ -328,6 +328,7 @@ function InvoiceDetailPage() {
                                   <TableHead className="text-right">Počet</TableHead>
                                   <TableHead>Jedn.</TableHead>
                                   <TableHead className="text-right">Cena bez DPH</TableHead>
+                                  <TableHead className="text-right">DPH</TableHead>
                                   <TableHead className="text-right">Celkem bez DPH</TableHead>
                                   <TableHead className="text-right">Celkem s DPH</TableHead>
                                 </TableRow>
@@ -335,7 +336,8 @@ function InvoiceDetailPage() {
                               <TableBody>
                                 {items.map((it, i) => {
                                   const total = it.total != null ? Number(it.total) : null;
-                                  const withVat = total != null ? total * VAT_RATE : null;
+                                  const vatRate = itemVatRate(it, rawItems, i, lineVatRate);
+                                  const withVat = total != null ? totalWithVat(total, vatRate) : null;
                                   return (
                                     <TableRow key={i}>
                                       <TableCell className="text-sm">
@@ -355,6 +357,7 @@ function InvoiceDetailPage() {
                                       <TableCell className="text-right">
                                         {it.unitPrice != null ? Number(it.unitPrice).toFixed(2) : "—"}
                                       </TableCell>
+                                      <TableCell className="text-right">{vatRate.toFixed(0)} %</TableCell>
                                       <TableCell className="text-right">
                                         {total != null ? total.toFixed(2) : "—"}
                                       </TableCell>
