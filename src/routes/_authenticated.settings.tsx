@@ -308,7 +308,12 @@ function SettingsPage() {
               <>
                 <p>
                   Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
-                  {testCfMut.data.statusText}. {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
+                  {testCfMut.data.statusText}.{" "}
+                  {testCfMut.data.testedUrl && (
+                    <span className="text-muted-foreground">
+                      (URL: <code>{testCfMut.data.testedUrl}</code>)
+                    </span>
+                  )}
                 </p>
                 {typeof testCfMut.data.clientsCount === "number" && (
                   <p>
@@ -316,13 +321,14 @@ function SettingsPage() {
                   </p>
                 )}
                 {testCfMut.data.clients && testCfMut.data.clients.length > 0 && (
-                  <ul className="mt-1 space-y-1 font-mono text-xs">
+                  <ol className="mt-1 space-y-1 font-mono text-xs list-decimal pl-5">
                     {testCfMut.data.clients.map((c, i) => (
                       <li key={`${c.id ?? i}`}>
-                        {c.id ?? "—"} {c.name && <span className="text-muted-foreground">({c.name})</span>}
+                        ID: <strong>{c.id ?? "—"}</strong> | Jméno: {c.name ?? "—"} | Telefon:{" "}
+                        {c.phone ?? "—"} | Email: {c.email ?? "—"}
                       </li>
                     ))}
-                  </ul>
+                  </ol>
                 )}
                 {testCfMut.data.bodyPreview && (
                   <details className="mt-2">
@@ -335,11 +341,27 @@ function SettingsPage() {
               </>
             ) : (
               <>
-                <p className="text-destructive">{testCfMut.data.error}</p>
+                <p className="text-destructive">
+                  Chyba ({testCfMut.data.error ?? "unknown"}){testCfMut.data.message ? `: ${testCfMut.data.message}` : ""}
+                </p>
                 {testCfMut.data.status !== undefined && (
                   <p>
-                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText} {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
+                    HTTP <strong>{testCfMut.data.status}</strong> {testCfMut.data.statusText}{" "}
+                    {testCfMut.data.testedUrl && (
+                      <span className="text-muted-foreground">
+                        (URL: <code>{testCfMut.data.testedUrl}</code>)
+                      </span>
+                    )}
                   </p>
+                )}
+                {testCfMut.data.details && testCfMut.data.details.length > 0 && (
+                  <ul className="mt-1 space-y-1 text-xs">
+                    {testCfMut.data.details.map((d, i) => (
+                      <li key={i}>
+                        – Pole: <code>{d.field ?? "N/A"}</code> | Chyba: {d.message ?? "N/A"}
+                      </li>
+                    ))}
+                  </ul>
                 )}
                 {testCfMut.data.bodyPreview && (
                   <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
@@ -348,6 +370,7 @@ function SettingsPage() {
                 )}
               </>
             )}
+
           </CardContent>
         </Card>
       )}
