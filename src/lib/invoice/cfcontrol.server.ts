@@ -119,10 +119,17 @@ export interface CfTestResult {
   clients?: CfTestClient[];
 }
 
+function buildCfControlUrl(baseUrl: string, path: string, query: URLSearchParams): string {
+  const base = baseUrl.endsWith("/") ? baseUrl : `${baseUrl}/`;
+  const url = base + path.replace(/^\/+/, "");
+  const qs = query.toString();
+  return qs ? `${url}?${qs}` : url;
+}
+
 /**
  * Mirror of the PHP `CfControl\Api->get('/customer/list', ['limit' => 10])`
- * call used in test_clients.php — same URL composition, same Authorization
- * header, same JSON envelope handling.
+ * call used in test_clients.php — same URL composition, Authorization-only
+ * GET header, JSON requirement and error envelope handling.
  */
 export async function testCfControl(
   override?: Partial<CfControlConfig>,
@@ -133,19 +140,18 @@ export async function testCfControl(
   const key = (override?.api_key ?? stored.api_key).trim();
   if (!base) return { ok: false, error: "Chybí URL." };
   if (!key) return { ok: false, error: "Chybí API klíč." };
-  // PHP: pokud apiUrl nekončí lomítkem, přidá ho, pak `apiUrl . ltrim($path, '/')`.
-  if (!base.endsWith("/")) base += "/";
-
-  const rawPath = (customPath && customPath.trim()) || "/customer/list?limit=10";
+  const customInput = customPath?.trim();
+  const rawPath = customInput || "/customer/list";
   const [pathOnly, queryStr] = rawPath.split("?", 2);
-  const url = base + pathOnly.replace(/^\/+/, "") + (queryStr ? `?${queryStr}` : "");
+  const query = new URLSearchParams(queryStr ?? "");
+  if (!customInput) query.set("limit", "10");
+  const url = buildCfControlUrl(base, pathOnly, query);
 
   try {
     const res = await fetch(url, {
       method: "GET",
       headers: {
         Authorization: `Bearer ${key}`,
-        Accept: "application/json",
       },
     });
     const txt = await res.text();
@@ -154,6 +160,19 @@ export async function testCfControl(
       parsed = txt ? JSON.parse(txt) : null;
     } catch {
       parsed = null;
+    }
+
+    if (!parsed) {
+      return {
+        ok: false,
+        status: 0,
+        statusText: res.statusText,
+        bodyPreview: txt.slice(0, 800),
+        testedPath: rawPath,
+        testedUrl: url,
+        error: "transport",
+        message: `Odpověď není validní JSON (HTTP ${res.status}).`,
+      };
     }
 
     if (res.ok) {
