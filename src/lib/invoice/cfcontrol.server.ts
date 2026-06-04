@@ -25,11 +25,11 @@ export async function loadCfControlConfig(): Promise<CfControlConfig> {
   };
 }
 
-async function resolved(): Promise<{ base: string; key: string }> {
+async function resolved(): Promise<{ base: string; key: string; queue: number }> {
   const cfg = await loadCfControlConfig();
   if (!cfg.base_url) throw new Error("CF-control URL není nastavena (Nastavení).");
   if (!cfg.api_key) throw new Error("CF-control API klíč není nastaven (Nastavení).");
-  return { base: cfg.base_url.replace(/\/+$/, ""), key: cfg.api_key };
+  return { base: cfg.base_url.replace(/\/+$/, ""), key: cfg.api_key, queue: cfg.invoice_number_queue };
 }
 
 function authHeaders(key: string): HeadersInit {
