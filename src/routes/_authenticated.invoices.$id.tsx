@@ -248,8 +248,18 @@ function InvoiceDetailPage() {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => openPdf(c.pdf_storage_path)}
+                      onClick={() => viewPdf(c.pdf_storage_path)}
                       disabled={!c.pdf_storage_path}
+                      title="Zobrazit PDF"
+                    >
+                      <Eye className="h-4 w-4" />
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => downloadPdf(c.pdf_storage_path)}
+                      disabled={!c.pdf_storage_path}
+                      title="Stáhnout PDF"
                     >
                       <Download className="h-4 w-4" />
                     </Button>
