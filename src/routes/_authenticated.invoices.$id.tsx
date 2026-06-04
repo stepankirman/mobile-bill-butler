@@ -362,7 +362,7 @@ function InvoiceDetailPage() {
                                         {total != null ? total.toFixed(2) : "—"}
                                       </TableCell>
                                       <TableCell className="text-right font-medium">
-                                        {withVat != null && total !== 0 ? withVat.toFixed(2) : "—"}
+                                        {withVat != null ? withVat.toFixed(2) : "—"}
                                       </TableCell>
                                     </TableRow>
                                   );
