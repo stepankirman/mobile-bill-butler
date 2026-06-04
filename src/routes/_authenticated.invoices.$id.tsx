@@ -189,9 +189,12 @@ function InvoiceDetailPage() {
             </p>
           </div>
         </CardHeader>
-        <CardContent>
-          <Button variant="outline" onClick={() => openPdf(invoice.pdf_storage_path)}>
-            <Download className="mr-2 h-4 w-4" /> Souhrnné PDF
+        <CardContent className="flex flex-wrap gap-2">
+          <Button variant="outline" onClick={() => viewPdf(invoice.pdf_storage_path)}>
+            <Eye className="mr-2 h-4 w-4" /> Zobrazit PDF
+          </Button>
+          <Button variant="outline" onClick={() => downloadPdf(invoice.pdf_storage_path)}>
+            <Download className="mr-2 h-4 w-4" /> Stáhnout PDF
           </Button>
         </CardContent>
       </Card>
