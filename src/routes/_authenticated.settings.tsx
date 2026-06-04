@@ -308,7 +308,7 @@ function SettingsPage() {
               <>
                 <p>
                   Připojení v pořádku. HTTP <strong>{testCfMut.data.status}</strong>{" "}
-                  {testCfMut.data.statusText}.
+                  {testCfMut.data.statusText}. {testCfMut.data.testedPath && <span className="text-muted-foreground">(cesta: <code>{testCfMut.data.testedPath}</code>)</span>}
                 </p>
                 {testCfMut.data.bodyPreview && (
                   <pre className="mt-2 max-h-48 overflow-auto rounded bg-muted p-2 text-xs">
