@@ -234,10 +234,10 @@ function SettingsPage() {
                   id="cfUrl"
                   value={cfUrl}
                   onChange={(e) => setCfUrl(e.target.value)}
-                  placeholder="https://app.cf-control.cz/api"
+                  placeholder="https://demo.cf-control.cz/api/web/v2"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Bez koncového lomítka. Volá se např. <code>{`{URL}/receivables`}</code>.
+                  Např. <code>https://&lt;instance&gt;.cf-control.cz/api/web/v2</code>. Bez koncového lomítka.
                 </p>
               </div>
               <div className="space-y-2">
