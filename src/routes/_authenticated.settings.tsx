@@ -262,10 +262,10 @@ function SettingsPage() {
                   id="cfTestPath"
                   value={cfTestPath}
                   onChange={(e) => setCfTestPath(e.target.value)}
-                  placeholder="/api/receivables?limit=1"
+                  placeholder="/customer/list?limit=10"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pokud necháte prázdné, vyzkouší se několik běžných GET endpointů.
+                  Pokud necháte prázdné, zavolá se <code>GET /customer/list?limit=10</code>.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">
