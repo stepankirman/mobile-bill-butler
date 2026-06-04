@@ -182,6 +182,8 @@ function dechunk(body: string): string {
     i += size + 2;
   }
   return out || body;
+}
+
 
 async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: number; statusText: string; text: string }> {
   const target = new URL(url);
