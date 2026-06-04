@@ -101,36 +101,50 @@ function InvoiceDetailPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
   });
 
-  async function openPdf(path: string | null) {
+  async function getPdfBlobUrl(path: string): Promise<string> {
+    const { url } = await signFn({ data: { path } });
+    const res = await fetch(url);
+    if (!res.ok) throw new Error("fetch failed");
+    const blob = await res.blob();
+    const pdfBlob =
+      blob.type === "application/pdf" ? blob : new Blob([blob], { type: "application/pdf" });
+    return URL.createObjectURL(pdfBlob);
+  }
+
+  async function viewPdf(path: string | null) {
     if (!path) {
       toast.error("PDF pro tuto položku neexistuje.");
       return;
     }
-    // Open the tab synchronously to avoid popup blockers
     const win = window.open("about:blank", "_blank");
     try {
-      const { url } = await signFn({ data: { path } });
-      try {
-        const res = await fetch(url);
-        if (!res.ok) throw new Error("fetch failed");
-        const blob = await res.blob();
-        const pdfBlob = blob.type === "application/pdf"
-          ? blob
-          : new Blob([blob], { type: "application/pdf" });
-        const blobUrl = URL.createObjectURL(pdfBlob);
-        if (win) {
-          win.location.href = blobUrl;
-        } else {
-          window.location.href = blobUrl;
-        }
-        setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
-      } catch {
-        if (win) win.location.href = url;
-        else window.location.href = url;
-      }
+      const blobUrl = await getPdfBlobUrl(path);
+      if (win) win.location.href = blobUrl;
+      else window.location.href = blobUrl;
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
     } catch (e) {
       if (win) win.close();
-      toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
+      toast.error(e instanceof Error ? e.message : "Nelze zobrazit PDF");
+    }
+  }
+
+  async function downloadPdf(path: string | null) {
+    if (!path) {
+      toast.error("PDF pro tuto položku neexistuje.");
+      return;
+    }
+    try {
+      const blobUrl = await getPdfBlobUrl(path);
+      const a = document.createElement("a");
+      a.href = blobUrl;
+      a.download = path.split("/").pop() || "invoice.pdf";
+      a.style.display = "none";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Nelze stáhnout PDF");
     }
   }
 
