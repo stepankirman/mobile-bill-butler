@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/integrations/supabase/client.server";
 export interface CfControlConfig {
   base_url: string;
   api_key: string;
+  invoice_number_queue: number;
 }
 
 export async function loadCfControlConfig(): Promise<CfControlConfig> {
@@ -16,9 +17,11 @@ export async function loadCfControlConfig(): Promise<CfControlConfig> {
     .eq("key", "cf_control")
     .maybeSingle();
   const v = (data?.value ?? {}) as Partial<CfControlConfig>;
+  const q = Number(v.invoice_number_queue ?? process.env.CF_CONTROL_INVOICE_QUEUE ?? 1);
   return {
     base_url: (v.base_url || process.env.CF_CONTROL_API_BASE_URL || "").trim(),
     api_key: (process.env.CF_CONTROL_API_KEY || v.api_key || "").trim(),
+    invoice_number_queue: Number.isFinite(q) && q > 0 ? q : 1,
   };
 }
 
