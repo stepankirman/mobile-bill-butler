@@ -20,8 +20,42 @@ function SettingsPage() {
   const getFn = useServerFn(getSheetSettings);
   const saveFn = useServerFn(saveSheetSettings);
   const testFn = useServerFn(testSheetSettings);
+  const getCfFn = useServerFn(getCfControlSettings);
+  const saveCfFn = useServerFn(saveCfControlSettings);
+  const testCfFn = useServerFn(testCfControlSettings);
 
   const { data, isLoading } = useQuery({ queryKey: ["sheet-settings"], queryFn: () => getFn() });
+  const { data: cfData, isLoading: cfLoading, refetch: refetchCf } = useQuery({
+    queryKey: ["cf-control-settings"],
+    queryFn: () => getCfFn(),
+  });
+
+  const [cfUrl, setCfUrl] = useState("");
+  const [cfKey, setCfKey] = useState("");
+
+  useEffect(() => {
+    if (cfData) setCfUrl(cfData.base_url ?? "");
+  }, [cfData]);
+
+  const saveCfMut = useMutation({
+    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey } }),
+    onSuccess: () => {
+      toast.success("CF-control nastavení uloženo.");
+      setCfKey("");
+      refetchCf();
+    },
+    onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba"),
+  });
+
+  const testCfMut = useMutation({
+    mutationFn: () =>
+      testCfFn({
+        data: {
+          base_url: cfUrl || undefined,
+          api_key: cfKey || undefined,
+        },
+      }),
+  });
 
   const [url, setUrl] = useState("");
   const [sheetName, setSheetName] = useState("");
