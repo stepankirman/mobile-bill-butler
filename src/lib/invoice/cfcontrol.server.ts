@@ -45,6 +45,7 @@ export interface CreateReceivableInput {
   amount: number;
   currency: string;
   description: string;
+  note?: string;
   variableSymbol?: string;
   dueDate?: string;
 }
@@ -55,7 +56,7 @@ export interface CreateReceivableInput {
  * and the `Cf-API-Authorization` header.
  */
 export async function createReceivable(input: CreateReceivableInput): Promise<{ id: string; raw: unknown }> {
-  const { base, key } = await resolved();
+  const { base, key, queue } = await resolved();
   const today = new Date();
   const dd = String(today.getDate()).padStart(2, "0");
   const mm = String(today.getMonth() + 1).padStart(2, "0");
@@ -63,7 +64,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
 
   const payload: Record<string, unknown> = {
     customerId: input.clientId,
-    invoiceNumberQueue: Number(process.env.CF_CONTROL_INVOICE_QUEUE || 1),
+    invoiceNumberQueue: queue,
     invoiceNumberCount: 6,
     invoiceNumber: 0,
     date: `${dd}.${mm}.${yyyy}`,
@@ -71,6 +72,8 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     maturity: 14,
     priceType: 1,
     variableSymbol: input.variableSymbol,
+    description: input.note,
+    note: input.note,
     items: [
       {
         name: input.description,
