@@ -47,12 +47,14 @@ function SettingsPage() {
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba"),
   });
 
+  const [cfTestPath, setCfTestPath] = useState("");
   const testCfMut = useMutation({
     mutationFn: () =>
       testCfFn({
         data: {
           base_url: cfUrl || undefined,
           api_key: cfKey || undefined,
+          test_path: cfTestPath || undefined,
         },
       }),
   });
