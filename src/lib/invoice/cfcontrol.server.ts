@@ -145,8 +145,7 @@ function parseCfControlV1Input(input?: string): { action: string; settings: Reco
   const raw = (input?.trim() || "getTarifList").replace(/^\/+/, "");
   const [actionPart, queryStr] = raw.split("?", 2);
   const settings: Record<string, unknown> = {};
-  if (!input?.trim()) {
-    // Default sanity-check call from the v1 docs.
+  if (actionPart === "getTarifList") {
     settings.tarifDataType = "minimal";
   }
 
