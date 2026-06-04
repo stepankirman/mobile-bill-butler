@@ -202,12 +202,18 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
     socket.once("end", () => {
       const raw = Buffer.concat(chunks).toString("utf8");
       const [head = "", ...bodyParts] = raw.split("\r\n\r\n");
-      const statusLine = head.split("\r\n")[0] ?? "";
+      const headLines = head.split("\r\n");
+      const statusLine = headLines[0] ?? "";
       const match = statusLine.match(/^HTTP\/\d(?:\.\d)?\s+(\d+)\s*(.*)$/);
+      const isChunked = headLines
+        .slice(1)
+        .some((l) => /^transfer-encoding:\s*chunked/i.test(l));
+      let body = bodyParts.join("\r\n\r\n");
+      if (isChunked) body = dechunk(body);
       resolve({
         status: match ? Number(match[1]) : 0,
         statusText: match?.[2] ?? "",
-        text: bodyParts.join("\r\n\r\n"),
+        text: body,
       });
     });
   });
