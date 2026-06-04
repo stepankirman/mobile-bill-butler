@@ -188,8 +188,7 @@ function extractClientList(data: unknown): Array<{ id?: string; name?: string }>
       (o.name as string | undefined) ??
       (o.full_name as string | undefined) ??
       (o.title as string | undefined) ??
-      [o.first_name, o.last_name].filter(Boolean).join(" ") ||
-      undefined;
+      ([o.first_name, o.last_name].filter(Boolean).join(" ") || undefined);
     return { id: id != null ? String(id) : undefined, name };
   });
 }
