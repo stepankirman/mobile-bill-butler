@@ -333,6 +333,12 @@ export const importCustomerInvoice = createServerFn({ method: "POST" })
       const storedClientId = String(ci.cf_control_client_id ?? "").trim();
       const clientId = freshClientId ?? (hasCurrentSheetRow ? "" : storedClientId);
       if (!clientId) {
+        if (storedClientId && hasCurrentSheetRow) {
+          await supabaseAdmin
+            .from("customer_invoices")
+            .update({ cf_control_client_id: null })
+            .eq("id", ci.id);
+        }
         throw new Error(
           `Chybí ID klienta v Google Sheets pro telefon ${phoneNumbers.join(", ") || "—"}`,
         );
