@@ -32,13 +32,17 @@ function SettingsPage() {
 
   const [cfUrl, setCfUrl] = useState("");
   const [cfKey, setCfKey] = useState("");
+  const [cfQueue, setCfQueue] = useState<number>(1);
 
   useEffect(() => {
-    if (cfData) setCfUrl(cfData.base_url ?? "");
+    if (cfData) {
+      setCfUrl(cfData.base_url ?? "");
+      setCfQueue(cfData.invoice_number_queue ?? 1);
+    }
   }, [cfData]);
 
   const saveCfMut = useMutation({
-    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey } }),
+    mutationFn: () => saveCfFn({ data: { base_url: cfUrl, api_key: cfKey, invoice_number_queue: cfQueue } }),
     onSuccess: () => {
       toast.success("CF-control nastavení uloženo.");
       setCfKey("");
