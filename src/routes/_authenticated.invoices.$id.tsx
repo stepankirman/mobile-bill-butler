@@ -403,7 +403,7 @@ function InvoiceDetailPage() {
                                   if (isInternetMb) {
                                     if (dispQty != null) dispQty = dispQty / 1024;
                                     if (dispUnitPrice != null) dispUnitPrice = dispUnitPrice * 1024;
-                                    dispUnit = "GB";
+                                    dispUnit = "MB";
                                   }
                                   return (
                                     <TableRow key={i}>

@@ -196,7 +196,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
         if (isInternetMb) {
           qty = qty / 1024;
           unitPrice = unitPrice * 1024;
-          unit = "GB";
+          unit = "MB";
         }
         const truncated = desc.length > 60 ? desc.slice(0, 57) + "..." : desc;
         page.drawText(ascii(truncated), { x: cols.desc.x, y, size: 9, font });
