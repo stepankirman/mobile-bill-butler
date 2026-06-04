@@ -262,10 +262,10 @@ function SettingsPage() {
                   id="cfTestPath"
                   value={cfTestPath}
                   onChange={(e) => setCfTestPath(e.target.value)}
-                  placeholder="/customer/list?limit=10"
+                  placeholder="/customer/list"
                 />
                 <p className="text-xs text-muted-foreground">
-                  Pokud necháte prázdné, zavolá se <code>GET /customer/list?limit=10</code>.
+                  Pokud necháte prázdné, zavolá se přesně jako v PHP <code>GET /customer/list</code> s parametrem <code>limit=10</code>.
                 </p>
               </div>
               <div className="flex gap-2 pt-2">
