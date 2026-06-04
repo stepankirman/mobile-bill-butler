@@ -106,9 +106,14 @@ function InvoiceDetailPage() {
   });
 
   const importMut = useMutation({
-    mutationFn: (customerInvoiceId: string) => importFn({ data: { customerInvoiceId } }),
-    onSuccess: () => {
-      toast.success("Importováno do CF-control a e-mail odeslán.");
+    mutationFn: (vars: { customerInvoiceId: string; skipEmail: boolean }) =>
+      importFn({ data: vars }),
+    onSuccess: (_d, vars) => {
+      toast.success(
+        vars.skipEmail
+          ? "Importováno do CF-control (bez e-mailu)."
+          : "Importováno do CF-control a e-mail odeslán.",
+      );
       qc.invalidateQueries({ queryKey: ["invoice", id] });
     },
     onError: (e: unknown) => toast.error(e instanceof Error ? e.message : "Chyba importu"),
