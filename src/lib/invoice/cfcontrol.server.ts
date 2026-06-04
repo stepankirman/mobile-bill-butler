@@ -168,6 +168,21 @@ function parseCfControlJson(text: string): unknown | null {
   }
 }
 
+function dechunk(body: string): string {
+  let out = "";
+  let i = 0;
+  while (i < body.length) {
+    const nl = body.indexOf("\r\n", i);
+    if (nl === -1) break;
+    const sizeHex = body.slice(i, nl).split(";")[0].trim();
+    const size = parseInt(sizeHex, 16);
+    if (!Number.isFinite(size) || size <= 0) break;
+    i = nl + 2;
+    out += body.slice(i, i + size);
+    i += size + 2;
+  }
+  return out || body;
+
 async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: number; statusText: string; text: string }> {
   const target = new URL(url);
   if (target.protocol !== "https:") {
