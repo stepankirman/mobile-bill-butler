@@ -178,7 +178,7 @@ export async function renderInvoicePdf(input: InvoicePdfInput): Promise<Uint8Arr
         const desc = it.description || it.feature || "—";
         const truncated = desc.length > 60 ? desc.slice(0, 57) + "..." : desc;
         page.drawText(ascii(truncated), { x: cols.desc.x, y, size: 9, font });
-        page.drawText(ascii(it.quantity ? String(it.quantity) : "—"), { x: cols.qty.x, y, size: 9, font });
+        page.drawText(ascii(fmtQty(it.quantity)), { x: cols.qty.x, y, size: 9, font });
         page.drawText(ascii(it.unit || "—"), { x: cols.unit.x, y, size: 9, font });
         page.drawText(ascii(fmt(it.unitPrice)), { x: cols.price.x, y, size: 9, font });
         const totalStr = fmt(it.total);
