@@ -33,9 +33,35 @@ interface PolItem {
   unit?: string;
   unitPrice?: number;
   total?: number;
+  vatRate?: number;
 }
 
-const VAT_RATE = 1.21;
+const DEFAULT_VAT_RATE = 21;
+
+function normalizeVatRate(v: unknown): number | null {
+  if (v == null || v === "") return null;
+  const n = Number(String(v).replace(",", "."));
+  if (!Number.isFinite(n)) return null;
+  return n > 0 && n <= 1 ? n * 100 : n;
+}
+
+function totalWithVat(total: number, vatRate: number): number {
+  return total * (1 + vatRate / 100);
+}
+
+function collectRawItems(container: unknown): Array<Record<string, unknown>> {
+  if (container == null) return [];
+  if (Array.isArray(container)) return container.filter((v): v is Record<string, unknown> => typeof v === "object" && v != null);
+  if (typeof container !== "object") return [];
+  return Object.entries(container as Record<string, unknown>)
+    .filter(([k]) => k.startsWith("item"))
+    .map(([, v]) => v)
+    .filter((v): v is Record<string, unknown> => typeof v === "object" && v != null);
+}
+
+function itemVatRate(item: PolItem, rawItems: Array<Record<string, unknown>>, index: number, fallback: number): number {
+  return normalizeVatRate(item.vatRate) ?? normalizeVatRate(rawItems[index]?.DPH_PROCENTA) ?? fallback;
+}
 
 function decodeEntities(s: string): string {
   if (!s) return s;
@@ -80,33 +106,27 @@ function InvoiceDetailPage() {
       toast.error("PDF pro tuto položku neexistuje.");
       return;
     }
-    const win = window.open("", "_blank");
     try {
+      toast.info("Připravuji PDF ke stažení…");
       const { url } = await signFn({ data: { path } });
       try {
         const res = await fetch(url);
         if (!res.ok) throw new Error("fetch failed");
         const blob = await res.blob();
         const blobUrl = URL.createObjectURL(blob);
-        if (win) {
-          win.location.href = blobUrl;
-        } else {
-          const a = document.createElement("a");
-          a.href = blobUrl;
-          a.target = "_blank";
-          a.rel = "noopener noreferrer";
-          a.download = path.split("/").pop() || "invoice.pdf";
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-        }
+        const a = document.createElement("a");
+        a.href = blobUrl;
+        a.download = path.split("/").pop() || "invoice.pdf";
+        a.style.display = "none";
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
         setTimeout(() => URL.revokeObjectURL(blobUrl), 60_000);
+        toast.success("PDF se stahuje.");
       } catch {
-        if (win) win.location.href = url;
-        else window.location.href = url;
+        window.location.href = url;
       }
     } catch (e) {
-      if (win) win.close();
       toast.error(e instanceof Error ? e.message : "Nelze otevřít PDF");
     }
   }
@@ -255,10 +275,15 @@ function InvoiceDetailPage() {
             <TableBody>
               {lines.map((l) => {
                 const isOpen = expanded.has(l.id);
-                const raw = (l.raw_json ?? {}) as { items?: PolItem[] };
+                const raw = (l.raw_json ?? {}) as { items?: PolItem[]; raw?: unknown };
                 const items: PolItem[] = Array.isArray(raw.items) ? raw.items : [];
+                const rawLine = raw.raw as Record<string, unknown> | undefined;
+                const rawItems = collectRawItems(rawLine?.POL);
+                const lineVatRate = normalizeVatRate(rawLine?.DPH_PROCENTA) ?? DEFAULT_VAT_RATE;
                 const totalBase = Number(l.total);
-                const totalVat = totalBase * VAT_RATE;
+                const totalVat = items.length > 0
+                  ? items.reduce((sum, it, i) => sum + totalWithVat(Number(it.total ?? 0), itemVatRate(it, rawItems, i, lineVatRate)), 0)
+                  : totalWithVat(totalBase, lineVatRate);
                 return (
                   <Fragment key={l.id}>
                     <TableRow
