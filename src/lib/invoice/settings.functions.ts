@@ -8,6 +8,7 @@ import {
   parseSpreadsheetIdFromUrlOrId,
   type SheetConfig,
 } from "./sheet.server";
+import { loadCfControlConfig, testCfControl } from "./cfcontrol.server";
 
 export const getSheetSettings = createServerFn({ method: "GET" })
   .middleware([requireSupabaseAuth])
