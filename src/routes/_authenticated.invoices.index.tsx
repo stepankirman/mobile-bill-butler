@@ -337,63 +337,16 @@ function InvoiceListPage() {
           )}
         </CardHeader>
         <CardContent>
-          {/* placeholder marker for old header end */}
-          <div className="flex flex-wrap items-center gap-2">
-            {months.length > 1 && (
-              <select
-                className="h-9 rounded-md border border-input bg-background px-2 text-sm"
-                defaultValue=""
-                onChange={(e) => {
-                  if (e.target.value) {
-                    selectMonth(e.target.value);
-                    e.target.value = "";
-                  }
-                }}
-              >
-                <option value="">Označit měsíc…</option>
-                {months.map((m) => (
-                  <option key={m} value={m}>
-                    {m}
-                  </option>
-                ))}
-              </select>
-            )}
-            <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  size="sm"
-                  disabled={selected.size === 0 || delMut.isPending}
-                >
-                  <Trash2 className="mr-2 h-4 w-4" />
-                  Smazat ({selected.size})
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Smazat vybrané faktury?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Bude smazáno {selected.size} faktur včetně všech položek, klientských
-                    rozpisů a PDF. Akci nelze vrátit.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Zrušit</AlertDialogCancel>
-                  <AlertDialogAction onClick={() => delMut.mutate(Array.from(selected))}>
-                    Smazat
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </div>
-        </CardHeader>
-        <CardContent>
           {isLoading && <p className="text-sm text-muted-foreground">Načítám…</p>}
           {error && <p className="text-sm text-destructive">{(error as Error).message}</p>}
-          {data && data.invoices.length === 0 && (
-            <p className="text-sm text-muted-foreground">Zatím žádná faktura.</p>
+          {data && invoices.length === 0 && (
+            <p className="text-sm text-muted-foreground">
+              {allInvoices.length === 0
+                ? "Zatím žádná faktura."
+                : "Žádná faktura nevyhovuje filtru měsíců."}
+            </p>
           )}
-          {data && data.invoices.length > 0 && (
+          {data && invoices.length > 0 && (
             <Table>
               <TableHeader>
                 <TableRow>
@@ -413,7 +366,7 @@ function InvoiceListPage() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {data.invoices.map((inv) => (
+                {invoices.map((inv) => (
                   <TableRow key={inv.id} data-state={selected.has(inv.id) ? "selected" : undefined}>
                     <TableCell>
                       <Checkbox
