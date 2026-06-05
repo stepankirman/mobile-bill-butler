@@ -290,7 +290,9 @@ async function cfControlV1Post(
   apiKey: string,
   data: Record<string, unknown>,
 ): Promise<{ status: number; statusText: string; text: string }> {
-  const body = flattenFormFields(data).join("&");
+  // Dle v1 dokumentace má POST parametry `action` (v query) a `data` (v těle).
+  // Všechna pole tedy musí být zabalena pod prefix `data[...]`.
+  const body = flattenFormFields(data, "data").join("&");
   const target = new URL(url);
   if (target.protocol !== "https:") {
     const res = await fetch(url, {
