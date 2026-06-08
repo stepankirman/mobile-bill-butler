@@ -52,7 +52,7 @@ export interface CreateReceivableInput {
 
 /**
  * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
- * POST `${apiUrl}?action=insertInvoice` with form-urlencoded `settings[..]` body
+ * POST `${apiUrl}?action=insertInvoice` with form-urlencoded data fields
  * and the `Cf-API-Authorization` header.
  */
 export async function createReceivable(input: CreateReceivableInput): Promise<{ id: string; raw: unknown }> {
@@ -263,6 +263,12 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
   });
 }
 
+function phpFormEncodeKey(key: string): string {
+  // PHP/cURL-style form names keep square brackets readable: items[0][name].
+  // Some older PHP backends parse this more reliably than %5B/%5D names.
+  return encodeURIComponent(key).replace(/%5B/g, "[").replace(/%5D/g, "]");
+}
+
 function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] {
   const out: string[] = [];
   for (const [k, v] of Object.entries(obj)) {
@@ -273,13 +279,13 @@ function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] 
         if (item !== null && typeof item === "object") {
           out.push(...flattenFormFields(item as Record<string, unknown>, `${key}[${i}]`));
         } else {
-          out.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
+          out.push(`${phpFormEncodeKey(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
         }
       });
     } else if (typeof v === "object") {
       out.push(...flattenFormFields(v as Record<string, unknown>, key));
     } else {
-      out.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
+      out.push(`${phpFormEncodeKey(key)}=${encodeURIComponent(String(v))}`);
     }
   }
   return out;
@@ -290,9 +296,10 @@ async function cfControlV1Post(
   apiKey: string,
   data: Record<string, unknown>,
 ): Promise<{ status: number; statusText: string; text: string }> {
-  // Dle v1 dokumentace má POST parametry `action` (v query) a `data` (v těle).
-  // Všechna pole tedy musí být zabalena pod prefix `data[...]`.
-  const body = flattenFormFields(data, "data").join("&");
+  // PHP klient posílá druhý argument `$api->post('insertInvoice', [...])`
+  // jako přímá POST pole (`customerId`, `items[0][name]`, ...). Neobalovat
+  // pod `data[...]`, CF-control pak `customerId` vyhodnotí jako chybně zadaný.
+  const body = flattenFormFields(data).join("&");
   const target = new URL(url);
   if (target.protocol !== "https:") {
     const res = await fetch(url, {
