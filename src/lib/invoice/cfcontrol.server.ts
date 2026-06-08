@@ -77,6 +77,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     customerId: customerIdNum,
     invoiceNumberQueue: Number(queue) || 1,
     invoiceNumberCount: 6,
+    invoiceNumber: 1,
     date: `${dd}.${mm}.${yyyy}`,
     paymentType: "bank",
     maturity: 14,
