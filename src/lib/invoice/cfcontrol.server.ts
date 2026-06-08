@@ -263,6 +263,12 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
   });
 }
 
+function phpFormEncodeKey(key: string): string {
+  // PHP/cURL-style form names keep square brackets readable: items[0][name].
+  // Some older PHP backends parse this more reliably than %5B/%5D names.
+  return encodeURIComponent(key).replace(/%5B/g, "[").replace(/%5D/g, "]");
+}
+
 function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] {
   const out: string[] = [];
   for (const [k, v] of Object.entries(obj)) {
@@ -273,13 +279,13 @@ function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] 
         if (item !== null && typeof item === "object") {
           out.push(...flattenFormFields(item as Record<string, unknown>, `${key}[${i}]`));
         } else {
-          out.push(`${encodeURIComponent(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
+          out.push(`${phpFormEncodeKey(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
         }
       });
     } else if (typeof v === "object") {
       out.push(...flattenFormFields(v as Record<string, unknown>, key));
     } else {
-      out.push(`${encodeURIComponent(key)}=${encodeURIComponent(String(v))}`);
+      out.push(`${phpFormEncodeKey(key)}=${encodeURIComponent(String(v))}`);
     }
   }
   return out;
