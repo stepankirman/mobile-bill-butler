@@ -52,7 +52,7 @@ export interface CreateReceivableInput {
 
 /**
  * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
- * POST `${apiUrl}?action=insertInvoice` with form-urlencoded `settings[..]` body
+ * POST `${apiUrl}?action=insertInvoice` with form-urlencoded data fields
  * and the `Cf-API-Authorization` header.
  */
 export async function createReceivable(input: CreateReceivableInput): Promise<{ id: string; raw: unknown }> {
@@ -290,9 +290,10 @@ async function cfControlV1Post(
   apiKey: string,
   data: Record<string, unknown>,
 ): Promise<{ status: number; statusText: string; text: string }> {
-  // Dle v1 dokumentace má POST parametry `action` (v query) a `data` (v těle).
-  // Všechna pole tedy musí být zabalena pod prefix `data[...]`.
-  const body = flattenFormFields(data, "data").join("&");
+  // PHP klient posílá druhý argument `$api->post('insertInvoice', [...])`
+  // jako přímá POST pole (`customerId`, `items[0][name]`, ...). Neobalovat
+  // pod `data[...]`, CF-control pak `customerId` vyhodnotí jako chybně zadaný.
+  const body = flattenFormFields(data).join("&");
   const target = new URL(url);
   if (target.protocol !== "https:") {
     const res = await fetch(url, {
