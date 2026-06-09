@@ -49,10 +49,10 @@ export interface CreateReceivableInput {
   variableSymbol?: string;
   dueDate?: string;
 }
-function decimal2(value: unknown): string {
+function decimal2(value: unknown): number {
   const n = typeof value === "number" ? value : Number(String(value ?? "").replace(",", "."));
-  if (!Number.isFinite(n) || n < 0) return "0.00";
-  return (Math.round(n * 100) / 100).toFixed(2);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(n * 100) / 100;
 }
 
 
