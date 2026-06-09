@@ -49,9 +49,10 @@ export interface CreateReceivableInput {
   variableSymbol?: string;
   dueDate?: string;
 }
-function round2(n: number): number {
-  if (!Number.isFinite(n)) return 0;
-  return Math.round(n * 100) / 100;
+function decimal2(value: unknown): string {
+  const n = typeof value === "number" ? value : Number(String(value ?? "").replace(",", "."));
+  if (!Number.isFinite(n) || n < 0) return "0.00";
+  return (Math.round(n * 100) / 100).toFixed(2);
 }
 
 
@@ -91,10 +92,10 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
       {
         name: (input.description || "Položka").toString().slice(0, 250),
         ...(itemDescription ? { description: itemDescription } : {}),
-        amount: round2(1),
+        amount: decimal2(1),
         unit: "ks",
-        price: round2(Number(input.amount) || 0),
-        sale: 0,
+        price: decimal2(input.amount),
+        sale: decimal2(0),
         saleInPrice: 0,
       },
     ],
