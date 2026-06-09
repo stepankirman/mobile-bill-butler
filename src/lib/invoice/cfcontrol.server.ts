@@ -73,12 +73,6 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     throw new Error(`CF-control insertInvoice: customerId musí být číslo (dostal jsem "${input.clientId}")`);
   }
 
-  // Pole pro položku slož z popisu + (volitelně) variabilního symbolu a poznámky,
-  // protože v1 insertInvoice nepodporuje top-level note/variableSymbol.
-  const itemDescription = [input.note, input.variableSymbol ? `VS: ${input.variableSymbol}` : null]
-    .filter(Boolean)
-    .join(" • ");
-
   const payload: Record<string, unknown> = {
     customerId: customerIdNum,
     invoiceNumberQueue: Number(queue) || 1,
@@ -91,7 +85,6 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     items: [
       {
         name: (input.description || "Položka").toString().slice(0, 250),
-        ...(itemDescription ? { description: itemDescription } : {}),
         amount: decimal2(1),
         unit: "ks",
         price: decimal2(input.amount),
