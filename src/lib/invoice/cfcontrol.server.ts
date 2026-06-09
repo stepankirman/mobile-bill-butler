@@ -109,8 +109,9 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
   const result = typeof env.result === "string" ? env.result : undefined;
   const apiOk = res.status >= 200 && res.status < 300 && result !== "CF_API_RESULT_ERROR" && errors.length === 0;
   if (!apiOk) {
-    const msg = errors[0]?.message ?? `HTTP ${res.status}: ${res.text.slice(0, 400)}`;
-    throw new Error(`CF-control insertInvoice: ${msg}`);
+    const detail = errors.map((e) => `${e.key ?? ""}${e.field ? `[${e.field}]` : ""}: ${e.message ?? ""}`).join(" | ");
+    const msg = detail || `HTTP ${res.status}: ${res.text.slice(0, 400)}`;
+    throw new Error(`CF-control insertInvoice: ${msg} | payload=${JSON.stringify(payload)}`);
   }
   const data = (env.data ?? {}) as Record<string, unknown>;
   const id = String(data.invoiceId ?? data.id ?? data.invoice_id ?? "");
