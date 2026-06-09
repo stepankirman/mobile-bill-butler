@@ -95,7 +95,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
         amount: decimal2(1),
         unit: "ks",
         price: decimal2(input.amount),
-        sale: decimal2(0),
+        sale: 0,
         saleInPrice: 0,
       },
     ],
