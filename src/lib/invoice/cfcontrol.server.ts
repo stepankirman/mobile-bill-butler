@@ -55,6 +55,17 @@ function decimal2(value: unknown): number {
   return Math.round(n * 100) / 100;
 }
 
+function cfInvoiceItemText(value: unknown): string {
+  return String(value || "Polozka")
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[–—−]/g, "-")
+    .replace(/[^A-Za-z0-9 .,_+\-/()]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 250) || "Polozka";
+}
+
 
 /**
  * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
@@ -84,7 +95,7 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     priceType: 1,
     items: [
       {
-        name: (input.description || "Položka").toString().slice(0, 250),
+        name: cfInvoiceItemText(input.description),
         amount: decimal2(1),
         unit: "ks",
         price: decimal2(input.amount),
@@ -265,9 +276,11 @@ async function cfControlV1Get(url: string, apiKey: string): Promise<{ status: nu
 }
 
 function phpFormEncodeKey(key: string): string {
-  // PHP/cURL-style form names keep square brackets readable: items[0][name].
-  // Some older PHP backends parse this more reliably than %5B/%5D names.
-  return encodeURIComponent(key).replace(/%5B/g, "[").replace(/%5D/g, "]");
+  return encodeURIComponent(key).replace(/%20/g, "+");
+}
+
+function phpFormEncodeValue(value: unknown): string {
+  return encodeURIComponent(String(value)).replace(/%20/g, "+");
 }
 
 function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] {
@@ -280,13 +293,13 @@ function flattenFormFields(obj: Record<string, unknown>, prefix = ""): string[] 
         if (item !== null && typeof item === "object") {
           out.push(...flattenFormFields(item as Record<string, unknown>, `${key}[${i}]`));
         } else {
-          out.push(`${phpFormEncodeKey(`${key}[${i}]`)}=${encodeURIComponent(String(item))}`);
+          out.push(`${phpFormEncodeKey(`${key}[${i}]`)}=${phpFormEncodeValue(item)}`);
         }
       });
     } else if (typeof v === "object") {
       out.push(...flattenFormFields(v as Record<string, unknown>, key));
     } else {
-      out.push(`${phpFormEncodeKey(key)}=${encodeURIComponent(String(v))}`);
+      out.push(`${phpFormEncodeKey(key)}=${phpFormEncodeValue(v)}`);
     }
   }
   return out;
