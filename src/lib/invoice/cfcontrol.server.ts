@@ -49,6 +49,11 @@ export interface CreateReceivableInput {
   variableSymbol?: string;
   dueDate?: string;
 }
+function round2(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
 
 /**
  * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
@@ -84,11 +89,11 @@ export async function createReceivable(input: CreateReceivableInput): Promise<{ 
     priceType: 1,
     items: [
       {
-        name: input.description,
+        name: (input.description || "Položka").toString().slice(0, 250),
         ...(itemDescription ? { description: itemDescription } : {}),
-        amount: 1,
+        amount: round2(1),
         unit: "ks",
-        price: input.amount,
+        price: round2(Number(input.amount) || 0),
         sale: 0,
         saleInPrice: 0,
       },
