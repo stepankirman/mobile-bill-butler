@@ -49,6 +49,11 @@ export interface CreateReceivableInput {
   variableSymbol?: string;
   dueDate?: string;
 }
+function round2(n: number): number {
+  if (!Number.isFinite(n)) return 0;
+  return Math.round(n * 100) / 100;
+}
+
 
 /**
  * Mirrors PHP `$api->post('insertInvoice', [...])` against the v1 API:
